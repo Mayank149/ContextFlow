@@ -166,12 +166,24 @@ frontend_dirs = [
 
 for fdir in frontend_dirs:
     if os.path.exists(fdir) and os.path.isdir(fdir):
-        # Serve index.html at root route if requested
         @app.get("/")
         async def serve_index():
             index_path = os.path.join(fdir, "index.html")
             if os.path.exists(index_path):
                 return FileResponse(index_path)
             return {"message": "ContextFlow API running. Access /docs for Swagger UI."}
+
+        @app.get("/style.css")
+        async def serve_css():
+            return FileResponse(os.path.join(fdir, "style.css"), media_type="text/css")
+
+        @app.get("/visualization.js")
+        async def serve_viz():
+            return FileResponse(os.path.join(fdir, "visualization.js"), media_type="application/javascript")
+
+        @app.get("/app.js")
+        async def serve_js():
+            return FileResponse(os.path.join(fdir, "app.js"), media_type="application/javascript")
+
         app.mount("/static", StaticFiles(directory=fdir), name="static")
         break

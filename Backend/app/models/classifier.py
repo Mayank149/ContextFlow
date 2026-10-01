@@ -47,10 +47,16 @@ class DebertaClassifier:
         except Exception:
             self.tokenizer = AutoTokenizer.from_pretrained("microsoft/deberta-v3-base")
 
-        self.model = AutoModelForSequenceClassification.from_pretrained(
-            self.model_path,
-            torch_dtype=torch.float32
-        )
+        try:
+            self.model = AutoModelForSequenceClassification.from_pretrained(
+                self.model_path,
+                dtype=torch.float32
+            )
+        except TypeError:
+            self.model = AutoModelForSequenceClassification.from_pretrained(
+                self.model_path,
+                torch_dtype=torch.float32
+            )
         self.model = self.model.to(self.device)
         self.model.eval()
         self.is_loaded = True

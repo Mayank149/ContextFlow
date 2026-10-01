@@ -5,7 +5,7 @@
 
 ---
 
-## ⚡ 30-Second Executive Summary
+## Executive Summary
 
 In multi-turn human-AI dialogues, conversations frequently branch, wander, or circle back. Conventional chatbots treat chat history as an append-only token dump, leading to **context drift, token bloat, and topical amnesia**.
 
@@ -36,14 +36,13 @@ In multi-turn human-AI dialogues, conversations frequently branch, wander, or ci
         Final Transition + State Routing + Explainability
 ```
 
-<!-- PLACEHOLDER FOR SCREENSHOT 1: System Dashboard & 3D Context Topology -->
-> ### 📸 Interactive Interface Overview
+> ### Interactive Interface Overview
 > ![ContextFlow 3D Interface Placeholder](docs/images/contextflow_ui_overview.png)  
 > *Figure 1: ContextFlow Warm Futuristic Editorial Interface — Real-time 3D topic topology (Three.js), DeBERTa probability distributions, and MiniLM semantic similarity gauges.*
 
 ---
 
-## 🎯 Key Metrics & Highlights
+## Key Metrics & Highlights
 
 | Metric | Result | Engineering Significance |
 | :--- | :--- | :--- |
@@ -55,7 +54,7 @@ In multi-turn human-AI dialogues, conversations frequently branch, wander, or ci
 
 ---
 
-## 🧠 Architectural Decisions: Why DeBERTa + MiniLM?
+## Architectural Decisions: Why DeBERTa + MiniLM?
 
 A common failure mode in AI engineering is using one model for everything or letting an embedding search blindly override a supervised classifier. ContextFlow implements a **strict division of responsibilities**:
 
@@ -95,14 +94,13 @@ If DeBERTa predicts `CONTINUATION` but the semantic similarity between the messa
 
 ---
 
-<!-- PLACEHOLDER FOR SCREENSHOT 2: Explainability Panel & Decision Breakdown -->
-> ### 🔍 Explainability & Transition Inspection
+> ### Explainability & Transition Inspection
 > ![ContextFlow Decision Explainability Placeholder](docs/images/contextflow_explainability.png)  
 > *Figure 2: Real-time explainability breakdown showing Transformer logits, semantic similarity delta ($\Delta$), and the natural language justification.*
 
 ---
 
-## 📂 Repository Structure
+## Repository Structure
 
 ```text
 ContextFlow/
@@ -140,7 +138,7 @@ ContextFlow/
 
 ---
 
-## 🚀 Quick Start Guide
+## Quick Start Guide
 
 ### Option A: Local Python Environment (Recommended)
 
@@ -183,7 +181,7 @@ docker run -p 8000:8000 contextflow-backend
 
 ---
 
-## 📡 API Reference: `POST /predict`
+## API Reference: `POST /predict`
 
 ### Request Example
 ```json
@@ -236,7 +234,7 @@ docker run -p 8000:8000 contextflow-backend
 
 ---
 
-## 🎨 Frontend Design & 3D Visualization
+## Frontend Design & 3D Visualization
 
 The user interface follows a **Warm Futuristic Editorial** design philosophy:
 - **Palette**: Deep charcoal surfaces (`#0c0e12`), cream typography, terracotta accents (`#e65a3d`), and lavender highlights (`#a78bfa`).
@@ -246,7 +244,7 @@ The user interface follows a **Warm Futuristic Editorial** design philosophy:
 
 ---
 
-## 🔮 Future Roadmap
+## Future Roadmap
 
 1. **Cross-Encoder Topic Reranker**: Improve RETURN candidate retrieval beyond 70.35% using a lightweight cross-encoder over candidate conversation turns.
 2. **Persistent Vector Memory**: Integrate SQLite-vec or ChromaDB for multi-session historical topic storage across persistent user sessions.
@@ -254,5 +252,5 @@ The user interface follows a **Warm Futuristic Editorial** design philosophy:
 
 ---
 
-## 📄 License
+## License
 MIT License. Created as an applied NLP and conversational context management project.
