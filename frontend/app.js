@@ -1,11 +1,10 @@
 /**
- * ContextFlow Main Application Logic (Vanilla JS)
- * Manages conversational state, API calls to FastAPI backend,
- * hybrid decision rendering, explainability, and 3D visual triggers.
+ * ContextFlow Application Controller (Obsidian & Emerald Edition)
+ * Autonomous Context Transition Engine & LLM-style Conversational Interface.
  */
 
-// Benchmark Scenarios
-const PRESET_SCENARIOS = {
+// Canonical Benchmarks (Available on-demand via dropdown)
+const BENCHMARK_SCENARIOS = {
   return_ml: {
     active_topic: { topic_id: "T3", summary: "Deploying Flask applications" },
     previous_topics: [
@@ -13,14 +12,14 @@ const PRESET_SCENARIOS = {
       { topic_id: "T2", summary: "Developing and deploying REST APIs" }
     ],
     history: [
-      { role: "user", content: "I'm preparing for a machine learning interview. What should I focus on?" },
-      { role: "assistant", content: "Focus on supervised learning, model evaluation, feature engineering, and probability." },
+      { role: "user", content: "I'm preparing for a machine learning interview. What core topics should I study?" },
+      { role: "assistant", content: "Focus on supervised learning, classification evaluation metrics, feature engineering, and core probability." },
       { role: "user", content: "What should I know about REST APIs?" },
-      { role: "assistant", content: "Know HTTP methods, status codes, authentication, JSON, and client-server communication." },
-      { role: "user", content: "How should I deploy a Flask application?" },
-      { role: "assistant", content: "Understand WSGI servers, environment variables, Docker basics, and deployment platforms." }
+      { role: "assistant", content: "Understand standard HTTP methods, status codes, token authentication, JSON payloads, and client-server architecture." },
+      { role: "user", content: "How do I deploy a Flask application in production?" },
+      { role: "assistant", content: "Use a WSGI server like Gunicorn behind an Nginx reverse proxy, manage configuration with environment variables, and containerize with Docker." }
     ],
-    current_message: "What metrics should I study for the classifier?"
+    next_message: "What metrics should I study for the classifier?"
   },
 
   shift_cloud: {
@@ -31,9 +30,9 @@ const PRESET_SCENARIOS = {
     ],
     history: [
       { role: "user", content: "Can you explain how precision and recall trade off?" },
-      { role: "assistant", content: "Precision measures exactness while recall measures completeness. High threshold increases precision." }
+      { role: "assistant", content: "Precision measures exactness while recall measures completeness. Shifting decision thresholds adjusts the trade-off." }
     ],
-    current_message: "Let's pivot to setting up automated CI/CD pipelines with GitHub Actions."
+    next_message: "Let's pivot to setting up automated CI/CD pipelines with GitHub Actions."
   },
 
   continuation_normal: {
@@ -43,10 +42,10 @@ const PRESET_SCENARIOS = {
       { topic_id: "T2", summary: "Developing and deploying REST APIs" }
     ],
     history: [
-      { role: "user", content: "How should I deploy a Flask application?" },
-      { role: "assistant", content: "Understand WSGI servers, environment variables, Docker basics, and deployment platforms." }
+      { role: "user", content: "How do I deploy a Flask application?" },
+      { role: "assistant", content: "Use Gunicorn as the WSGI server along with Docker containers." }
     ],
-    current_message: "Should I use Gunicorn or uWSGI as the WSGI server for Flask?"
+    next_message: "Should I configure Gunicorn worker processes based on available CPU cores?"
   },
 
   hybrid_override: {
@@ -59,7 +58,7 @@ const PRESET_SCENARIOS = {
       { role: "user", content: "Deploying with gunicorn on Linux." },
       { role: "assistant", content: "Use systemd or supervisord to keep the process running." }
     ],
-    current_message: "Going back to the interview preparation, which behavioral leadership questions should I expect?"
+    next_message: "Going back to the interview preparation, which behavioral leadership questions should I expect?"
   }
 };
 
@@ -67,32 +66,36 @@ class ContextFlowApp {
   constructor() {
     this.apiBaseUrl = window.location.origin.includes(":8000") 
       ? window.location.origin 
-      : "http://localhost:8000";
+      : "http://127.0.0.1:8000";
 
     this.backendAvailable = false;
     this.topology = null;
 
-    // Active state
-    this.currentScenarioKey = "return_ml";
+    // Start with empty conversation state
     this.history = [];
     this.activeTopic = null;
     this.previousTopics = [];
+    this.topicCounter = 1;
     this.threshold = 0.20;
 
     this.dom = {
-      scenarioSelect: document.getElementById("scenarioSelect"),
+      baselineSelect: document.getElementById("baselineSelect"),
+      serverStatusPill: document.getElementById("serverStatusPill"),
       serverStatusDot: document.getElementById("serverStatusDot"),
       serverStatusText: document.getElementById("serverStatusText"),
-      dialogueContainer: document.getElementById("dialogueContainer"),
-      currentMessageInput: document.getElementById("currentMessageInput"),
-      analyzeBtn: document.getElementById("analyzeBtn"),
-      tokenEstimate: document.getElementById("tokenEstimate"),
-      chipThresholdVal: document.getElementById("chipThresholdVal"),
-      thresholdSlider: document.getElementById("thresholdSlider"),
-      thresholdDisplay: document.getElementById("thresholdDisplay"),
+      chatMessagesStream: document.getElementById("chatMessagesStream"),
+      chatWelcomeBanner: document.getElementById("chatWelcomeBanner"),
+      chatForm: document.getElementById("chatForm"),
+      chatInput: document.getElementById("chatInput"),
+      sendBtn: document.getElementById("sendBtn"),
+      composerActiveTopic: document.getElementById("composerActiveTopic"),
+      clearChatBtn: document.getElementById("clearChatBtn"),
+      viewGraphBtn: document.getElementById("viewGraphBtn"),
       activeTopicBadge: document.getElementById("activeTopicBadge"),
       activeTopicSummary: document.getElementById("activeTopicSummary"),
       candidateTopicsList: document.getElementById("candidateTopicsList"),
+      topicCount: document.getElementById("topicCount"),
+      emptyTopicsMsg: document.getElementById("emptyTopicsMsg"),
       predictionBadge: document.getElementById("predictionBadge"),
       predictionIcon: document.getElementById("predictionIcon"),
       predictionTitle: document.getElementById("predictionTitle"),
@@ -111,202 +114,218 @@ class ContextFlowApp {
       overridePill: document.getElementById("overridePill"),
       explanationText: document.getElementById("explanationText"),
       inferenceLatency: document.getElementById("inferenceLatency"),
-      clearChatBtn: document.getElementById("clearChatBtn"),
-      resetCamBtn: document.getElementById("resetCamBtn"),
-      toggleWireframeBtn: document.getElementById("toggleWireframeBtn"),
-      topicModal: document.getElementById("topicModal"),
-      addTopicModalBtn: document.getElementById("addTopicModalBtn"),
-      closeModalBtn: document.getElementById("closeModalBtn"),
-      cancelModalBtn: document.getElementById("cancelModalBtn"),
-      saveTopicBtn: document.getElementById("saveTopicBtn"),
-      newTopicIdInput: document.getElementById("newTopicIdInput"),
-      newTopicSummaryInput: document.getElementById("newTopicSummaryInput")
+      thresholdSlider: document.getElementById("thresholdSlider"),
+      thresholdDisplay: document.getElementById("thresholdDisplay"),
+      resetCamBtn: document.getElementById("resetCamBtn")
     };
 
     this.init();
   }
 
   async init() {
-    // 1. Initialize 3D Topology
+    // 1. Initialize 3D Topic Visualization
     if (window.ContextTopologyVisualization) {
       this.topology = new ContextTopologyVisualization("threeCanvasMount");
     }
 
-    // 2. Setup DOM event listeners
+    // 2. Setup Events
     this.setupEventListeners();
 
-    // 3. Check backend connectivity
+    // 3. Connect to CPU Backend
     await this.checkBackendStatus();
 
-    // 4. Load initial scenario
-    this.loadScenario(this.currentScenarioKey);
+    // 4. Initial empty state sync
+    this.syncTopicMemoryHUD();
   }
 
   setupEventListeners() {
-    this.dom.scenarioSelect.addEventListener("change", (e) => {
-      this.loadScenario(e.target.value);
+    // Chat Submit
+    this.dom.chatForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      this.handleUserSendMessage();
     });
 
-    this.dom.analyzeBtn.addEventListener("click", () => {
-      this.runPrediction();
+    // Enter to Send, Shift+Enter for new line
+    this.dom.chatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        this.handleUserSendMessage();
+      }
     });
 
-    this.dom.currentMessageInput.addEventListener("input", () => {
-      this.updateTokenEstimate();
+    // Baseline Dropdown
+    this.dom.baselineSelect.addEventListener("change", (e) => {
+      this.handleSelectBaseline(e.target.value);
     });
 
+    // Clear Chat
+    this.dom.clearChatBtn.addEventListener("click", () => {
+      this.resetToEmptyChat();
+    });
+
+    // Quick Starter Chips
+    document.querySelectorAll(".starter-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        const msg = chip.getAttribute("data-msg");
+        this.dom.chatInput.value = msg;
+        this.handleUserSendMessage();
+      });
+    });
+
+    // View Graph
+    this.dom.viewGraphBtn.addEventListener("click", () => {
+      const panel = document.getElementById("graphPanel");
+      if (panel) {
+        panel.scrollIntoView({ behavior: "smooth" });
+      }
+    });
+
+    // Threshold Slider
     this.dom.thresholdSlider.addEventListener("input", (e) => {
       this.threshold = parseFloat(e.target.value);
       this.dom.thresholdDisplay.textContent = this.threshold.toFixed(2);
-      this.dom.chipThresholdVal.textContent = this.threshold.toFixed(2);
     });
 
-    this.dom.clearChatBtn.addEventListener("click", () => {
-      this.history = [];
-      this.renderDialogue();
-    });
-
-    this.dom.resetCamBtn.addEventListener("click", () => {
-      if (this.topology) this.topology.resetCamera();
-    });
-
-    this.dom.toggleWireframeBtn.addEventListener("click", () => {
-      if (this.topology) this.topology.toggleGrid();
-    });
-
-    // Topic Modal
-    this.dom.addTopicModalBtn.addEventListener("click", () => {
-      this.dom.topicModal.classList.add("open");
-    });
-    this.dom.closeModalBtn.addEventListener("click", () => {
-      this.dom.topicModal.classList.remove("open");
-    });
-    this.dom.cancelModalBtn.addEventListener("click", () => {
-      this.dom.topicModal.classList.remove("open");
-    });
-    this.dom.saveTopicBtn.addEventListener("click", () => {
-      this.saveNewTopic();
-    });
+    // Reset 3D Camera
+    if (this.dom.resetCamBtn) {
+      this.dom.resetCamBtn.addEventListener("click", () => {
+        if (this.topology) this.topology.resetCamera();
+      });
+    }
   }
 
   async checkBackendStatus() {
     try {
-      const res = await fetch(`${this.apiBaseUrl}/health`, { signal: AbortSignal.timeout(2000) });
+      const res = await fetch(`${this.apiBaseUrl}/health`, { signal: AbortSignal.timeout(2500) });
       if (res.ok) {
         const data = await res.json();
         this.backendAvailable = true;
-        this.dom.serverStatusDot.className = "status-dot online";
-        this.dom.serverStatusText.textContent = `Backend: CPU Online (${data.device})`;
+        this.dom.serverStatusDot.className = "pulse-dot";
+        this.dom.serverStatusText.textContent = `CPU Backend: Online (${data.device})`;
         return;
       }
     } catch (e) {
       // Backend not yet running
     }
-
     this.backendAvailable = false;
-    this.dom.serverStatusDot.className = "status-dot offline";
-    this.dom.serverStatusText.textContent = "Backend: Offline (Client Simulation Mode)";
+    this.dom.serverStatusDot.className = "pulse-dot offline";
+    this.dom.serverStatusText.textContent = "Backend: Client Emulation Mode";
   }
 
-  loadScenario(key) {
-    if (key === "custom") return;
-    const scenario = PRESET_SCENARIOS[key];
-    if (!scenario) return;
+  resetToEmptyChat() {
+    this.history = [];
+    this.activeTopic = null;
+    this.previousTopics = [];
+    this.topicCounter = 1;
 
-    this.activeTopic = { ...scenario.active_topic };
-    this.previousTopics = scenario.previous_topics.map(t => ({ ...t }));
-    this.history = scenario.history.map(m => ({ ...m }));
-    this.dom.currentMessageInput.value = scenario.current_message;
+    // Reset UI
+    this.dom.chatMessagesStream.innerHTML = "";
+    this.dom.chatMessagesStream.appendChild(this.dom.chatWelcomeBanner);
+    this.dom.chatWelcomeBanner.style.display = "flex";
 
-    this.renderDialogue();
-    this.renderTopicMemoryHUD();
-    this.updateTokenEstimate();
+    this.dom.composerActiveTopic.textContent = "None (Fresh Start)";
+    this.dom.chatInput.value = "";
+    this.dom.baselineSelect.value = "empty";
 
+    this.resetDecisionPanel();
+    this.syncTopicMemoryHUD();
+
+    if (this.topology) {
+      this.topology.syncTopics(null, []);
+    }
+  }
+
+  handleSelectBaseline(key) {
+    if (key === "empty") {
+      this.resetToEmptyChat();
+      return;
+    }
+
+    const baseline = BENCHMARK_SCENARIOS[key];
+    if (!baseline) return;
+
+    this.activeTopic = { ...baseline.active_topic };
+    this.previousTopics = baseline.previous_topics.map(t => ({ ...t }));
+    this.history = baseline.history.map(m => ({ ...m }));
+    this.topicCounter = Math.max(4, this.previousTopics.length + 2);
+
+    // Render loaded baseline turns
+    this.dom.chatWelcomeBanner.style.display = "none";
+    this.dom.chatMessagesStream.innerHTML = "";
+
+    this.history.forEach((msg, idx) => {
+      this.appendMessageToChat(msg.role, msg.content, idx === this.history.length - 1 ? "CONTINUATION" : null);
+    });
+
+    this.dom.chatInput.value = baseline.next_message;
+    this.dom.composerActiveTopic.textContent = `[${this.activeTopic.topic_id}] ${this.activeTopic.summary}`;
+
+    this.syncTopicMemoryHUD();
     if (this.topology) {
       this.topology.syncTopics(this.activeTopic, this.previousTopics);
     }
   }
 
-  renderDialogue() {
-    const container = this.dom.dialogueContainer;
-    container.innerHTML = "";
+  async handleUserSendMessage() {
+    const rawMessage = this.dom.chatInput.value.trim();
+    if (!rawMessage) return;
 
-    this.history.forEach((msg, idx) => {
-      const bubble = document.createElement("div");
-      bubble.className = `message-bubble ${msg.role.toLowerCase()}`;
+    // 1. Immediately clear the textarea
+    this.dom.chatInput.value = "";
+    this.dom.chatWelcomeBanner.style.display = "none";
 
-      const meta = document.createElement("div");
-      meta.className = "message-meta";
-      meta.textContent = `${msg.role.toUpperCase()} #${idx + 1}`;
+    // 2. Append User Message to Chat Stream
+    this.appendMessageToChat("user", rawMessage);
 
-      const content = document.createElement("div");
-      content.className = "message-content";
-      content.textContent = msg.content;
+    // 3. First Message of Fresh Conversation Initialization
+    if (!this.activeTopic) {
+      const firstTopicSummary = this.synthesizeTopicSummary(rawMessage);
+      this.activeTopic = { topic_id: `T${this.topicCounter++}`, summary: firstTopicSummary };
+      this.previousTopics = [];
+      this.dom.composerActiveTopic.textContent = `[${this.activeTopic.topic_id}] ${this.activeTopic.summary}`;
 
-      bubble.appendChild(meta);
-      bubble.appendChild(content);
-      container.appendChild(bubble);
-    });
+      this.syncTopicMemoryHUD();
+      if (this.topology) {
+        this.topology.syncTopics(this.activeTopic, this.previousTopics);
+      }
 
-    container.scrollTop = container.scrollHeight;
-  }
+      // Generate initial assistant greeting
+      this.appendMessageToChat(
+        "assistant",
+        `Understood! I've initialized our active conversational topic on **[${this.activeTopic.topic_id}] ${this.activeTopic.summary}**. Let's dive in. What specific questions do you have?`,
+        "CONTINUATION"
+      );
 
-  renderTopicMemoryHUD() {
-    if (this.activeTopic) {
-      this.dom.activeTopicBadge.textContent = this.activeTopic.topic_id;
-      this.dom.activeTopicSummary.textContent = this.activeTopic.summary;
-    }
-
-    const list = this.dom.candidateTopicsList;
-    list.innerHTML = "";
-
-    this.previousTopics.forEach(topic => {
-      const chip = document.createElement("div");
-      chip.className = "candidate-topic-chip";
-      chip.id = `chip-${topic.topic_id}`;
-
-      chip.innerHTML = `
-        <div class="candidate-chip-header">
-          <span class="candidate-id">${topic.topic_id}</span>
-          <span class="candidate-sim" id="sim-badge-${topic.topic_id}">--</span>
-        </div>
-        <p class="candidate-summary" title="${topic.summary}">${topic.summary}</p>
-      `;
-
-      chip.addEventListener("click", () => {
-        // Swap to make active
-        const oldActive = this.activeTopic;
-        this.activeTopic = topic;
-        this.previousTopics = this.previousTopics.filter(t => t.topic_id !== topic.topic_id);
-        if (oldActive) this.previousTopics.push(oldActive);
-        this.renderTopicMemoryHUD();
-        if (this.topology) {
-          this.topology.syncTopics(this.activeTopic, this.previousTopics);
-        }
+      this.renderDecisionResults({
+        prediction: "CONTINUATION",
+        confidence: 0.9998,
+        probabilities: { CONTINUATION: 0.9998, SHIFT: 0.0001, RETURN: 0.0001 },
+        semantic: {
+          active_topic: this.activeTopic.topic_id,
+          active_similarity: 0.85,
+          best_previous_topic: null,
+          best_previous_similarity: null,
+          similarity_margin: null,
+          all_similarities: { [this.activeTopic.topic_id]: 0.85 }
+        },
+        returned_topic: null,
+        explanation: `Initial conversation anchor established on topic [${this.activeTopic.topic_id}] '${this.activeTopic.summary}'.`,
+        hybrid_override_applied: false
       });
 
-      list.appendChild(chip);
-    });
-  }
+      this.history.push({ role: "user", content: rawMessage });
+      return;
+    }
 
-  updateTokenEstimate() {
-    const text = this.dom.currentMessageInput.value;
-    const tokens = Math.max(1, Math.round(text.length / 4));
-    this.dom.tokenEstimate.textContent = `~${tokens} tokens`;
-  }
-
-  async runPrediction() {
-    const message = this.dom.currentMessageInput.value.trim();
-    if (!message) return;
-
-    this.dom.analyzeBtn.classList.add("loading");
+    // 4. Send to Inference Pipeline
+    this.dom.sendBtn.classList.add("loading");
     const startTime = performance.now();
 
     const payload = {
       history: this.history,
       active_topic: this.activeTopic,
       previous_topics: this.previousTopics,
-      current_message: message,
+      current_message: rawMessage,
       continuation_threshold: this.threshold
     };
 
@@ -319,49 +338,187 @@ class ContextFlowApp {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-
         if (response.ok) {
           result = await response.json();
-        } else {
-          console.warn("Backend error, falling back to local client simulation.");
         }
       } catch (err) {
-        console.warn("Connection failure, falling back to client simulation:", err);
+        console.warn("Backend error, falling back to local simulation:", err);
       }
     }
 
     if (!result) {
-      // High-fidelity fallback client simulation matching the DeBERTa + MiniLM notebook weights
       result = this.simulateInference(payload);
     }
 
     const duration = Math.round(performance.now() - startTime);
     this.dom.inferenceLatency.textContent = `${duration}ms CPU`;
-    this.dom.analyzeBtn.classList.remove("loading");
+    this.dom.sendBtn.classList.remove("loading");
 
-    // Display decision & evidence
+    // 5. Update Decision Panel
     this.renderDecisionResults(result);
 
-    // Apply Transition Effects
-    this.handleTransitionStateUpdate(result, message);
+    // 6. Execute Dynamic State Transition (Shift, Return, Continuation)
+    this.handleTransitionStateUpdate(result, rawMessage);
+  }
+
+  handleTransitionStateUpdate(result, userMessage) {
+    let pred = result.prediction;
+
+    // If model/hybrid predicts RETURN but no historical topics exist in memory, fallback to SHIFT
+    if (pred === "RETURN" && (!result.returned_topic || this.previousTopics.length === 0)) {
+      pred = "SHIFT";
+      result.prediction = "SHIFT";
+      this.dom.predictionBadge.className = "hero-badge shift";
+      this.dom.predictionTitle.textContent = "SHIFT";
+      this.dom.predictionIcon.textContent = "↗";
+    }
+
+    this.history.push({ role: "user", content: userMessage });
+
+    let assistantResponse = "";
+
+    if (pred === "RETURN" && result.returned_topic) {
+      const returnedId = result.returned_topic.topic_id;
+      
+      // Trigger 3D Particle Beam
+      if (this.topology) {
+        this.topology.triggerReturnTransition(this.activeTopic.topic_id, returnedId);
+      }
+
+      // Switch active topic to returned topic
+      const oldActive = this.activeTopic;
+      this.activeTopic = result.returned_topic;
+      this.previousTopics = this.previousTopics.filter(t => t.topic_id !== returnedId);
+      if (oldActive) this.previousTopics.push(oldActive);
+
+      assistantResponse = `Circling back to **[${this.activeTopic.topic_id}] ${this.activeTopic.summary}**. Based on our earlier discussion, here are the key considerations regarding your query.`;
+
+    } else if (pred === "SHIFT") {
+      // Dynamic Topic Discovery: synthesize new topic summary from message
+      const newTopicSummary = this.synthesizeTopicSummary(userMessage);
+      const newTopicId = `T${this.topicCounter++}`;
+      const newTopic = { topic_id: newTopicId, summary: newTopicSummary };
+
+      // Move previous active topic to history
+      if (this.activeTopic) {
+        this.previousTopics.push(this.activeTopic);
+      }
+      this.activeTopic = newTopic;
+
+      if (this.topology) {
+        this.topology.syncTopics(this.activeTopic, this.previousTopics);
+        this.topology.triggerShiftTransition(newTopic.topic_id);
+      }
+
+      assistantResponse = `I see we are transitioning to a new topic: **[${newTopic.topic_id}] ${newTopic.summary}**. Let's explore this area.`;
+
+    } else if (pred === "CONTINUATION") {
+      if (this.topology) {
+        this.topology.triggerContinuationTransition(this.activeTopic.topic_id);
+      }
+      assistantResponse = `Understood. Continuing within **[${this.activeTopic.topic_id}] ${this.activeTopic.summary}**. Here is the information you requested.`;
+    }
+
+    // Append Assistant response to chat
+    setTimeout(() => {
+      this.appendMessageToChat("assistant", assistantResponse, pred);
+      this.history.push({ role: "assistant", content: assistantResponse });
+    }, 250);
+
+    // Sync HUD
+    this.dom.composerActiveTopic.textContent = `[${this.activeTopic.topic_id}] ${this.activeTopic.summary}`;
+    this.syncTopicMemoryHUD();
+    if (this.topology && pred !== "SHIFT") {
+      this.topology.syncTopics(this.activeTopic, this.previousTopics);
+    }
+  }
+
+  appendMessageToChat(role, text, transition = null) {
+    const stream = this.dom.chatMessagesStream;
+
+    const row = document.createElement("div");
+    row.className = `chat-message-row ${role}`;
+
+    const avatar = document.createElement("div");
+    avatar.className = "chat-avatar-circle";
+    avatar.textContent = role === "user" ? "YOU" : "CF";
+
+    const body = document.createElement("div");
+    body.className = "chat-bubble-body";
+
+    const meta = document.createElement("div");
+    meta.className = "chat-meta";
+    meta.textContent = role === "user" ? "You" : "ContextFlow";
+
+    if (transition && role === "assistant") {
+      const tag = document.createElement("span");
+      tag.className = `chat-transition-tag ${transition.toLowerCase()}`;
+      tag.textContent = transition;
+      meta.appendChild(tag);
+    }
+
+    const content = document.createElement("div");
+    content.className = "chat-content-card";
+    content.innerHTML = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+    body.appendChild(meta);
+    body.appendChild(content);
+    row.appendChild(avatar);
+    row.appendChild(body);
+
+    stream.appendChild(row);
+    stream.scrollTop = stream.scrollHeight;
+  }
+
+  syncTopicMemoryHUD() {
+    if (this.activeTopic) {
+      this.dom.activeTopicBadge.textContent = this.activeTopic.topic_id;
+      this.dom.activeTopicSummary.textContent = this.activeTopic.summary;
+    } else {
+      this.dom.activeTopicBadge.textContent = "--";
+      this.dom.activeTopicSummary.textContent = "No active topic yet. Send a message to start.";
+    }
+
+    const container = this.dom.candidateTopicsList;
+    container.innerHTML = "";
+    this.dom.topicCount.textContent = this.previousTopics.length;
+
+    if (this.previousTopics.length === 0) {
+      container.appendChild(this.dom.emptyTopicsMsg);
+      return;
+    }
+
+    this.previousTopics.forEach(t => {
+      const card = document.createElement("div");
+      card.className = "candidate-card-chip";
+      card.id = `chip-${t.topic_id}`;
+
+      card.innerHTML = `
+        <div class="candidate-card-top">
+          <span class="candidate-id-text">${t.topic_id}</span>
+          <span class="candidate-sim-score" id="sim-badge-${t.topic_id}">--</span>
+        </div>
+        <p class="candidate-desc-text" title="${t.summary}">${t.summary}</p>
+      `;
+
+      container.appendChild(card);
+    });
   }
 
   renderDecisionResults(result) {
     const p = result.prediction;
     const badge = this.dom.predictionBadge;
-    badge.className = `hero-prediction-badge ${p.toLowerCase()}`;
+    badge.className = `hero-badge ${p.toLowerCase()}`;
     this.dom.predictionTitle.textContent = p;
 
     if (p === "CONTINUATION") this.dom.predictionIcon.textContent = "➔";
     else if (p === "SHIFT") this.dom.predictionIcon.textContent = "↗";
     else if (p === "RETURN") this.dom.predictionIcon.textContent = "↺";
 
-    // Confidence
     const confPct = (result.confidence * 100).toFixed(2);
     this.dom.confidencePct.textContent = `${confPct}%`;
     this.dom.confidenceFill.style.width = `${confPct}%`;
 
-    // Transformer Probabilities
     const probs = result.probabilities;
     this.dom.fillContinuation.style.width = `${(probs.CONTINUATION * 100).toFixed(1)}%`;
     this.dom.valContinuation.textContent = `${(probs.CONTINUATION * 100).toFixed(2)}%`;
@@ -372,7 +529,6 @@ class ContextFlowApp {
     this.dom.fillReturn.style.width = `${(probs.RETURN * 100).toFixed(1)}%`;
     this.dom.valReturn.textContent = `${(probs.RETURN * 100).toFixed(2)}%`;
 
-    // Semantic Gauges
     const sem = result.semantic;
     this.dom.simActiveVal.textContent = sem.active_similarity.toFixed(3);
 
@@ -382,7 +538,7 @@ class ContextFlowApp {
       this.dom.simPrevTopicName.textContent = prevTopic ? `[${prevTopic.topic_id}] ${prevTopic.summary}` : sem.best_previous_topic;
     } else {
       this.dom.simPrevVal.textContent = "--";
-      this.dom.simPrevTopicName.textContent = "No candidates";
+      this.dom.simPrevTopicName.textContent = "None";
     }
 
     if (sem.similarity_margin !== null && sem.similarity_margin !== undefined) {
@@ -392,166 +548,113 @@ class ContextFlowApp {
       this.dom.similarityMarginVal.textContent = "--";
     }
 
-    // Update candidate chip similarity badges
     if (sem.all_similarities) {
       for (const [id, score] of Object.entries(sem.all_similarities)) {
         const badgeEl = document.getElementById(`sim-badge-${id}`);
         if (badgeEl) {
           badgeEl.textContent = score.toFixed(2);
-          if (score > 0.4) badgeEl.className = "candidate-sim high";
-          else badgeEl.className = "candidate-sim";
+          if (score > 0.4) badgeEl.className = "candidate-sim-score high";
+          else badgeEl.className = "candidate-sim-score";
         }
       }
     }
 
-    // Explainability Card
     this.dom.overridePill.style.display = result.hybrid_override_applied ? "inline-block" : "none";
     this.dom.explanationText.textContent = result.explanation;
   }
 
-  handleTransitionStateUpdate(result, userMessage) {
-    const pred = result.prediction;
-
-    // Append turn to history
-    this.history.push({ role: "user", content: userMessage });
-
-    if (pred === "RETURN" && result.returned_topic) {
-      const returnedId = result.returned_topic.topic_id;
-      // 3D beam transition animation
-      if (this.topology) {
-        this.topology.triggerReturnTransition(this.activeTopic.topic_id, returnedId);
-      }
-
-      // Highlight chip in HUD
-      const chip = document.getElementById(`chip-${returnedId}`);
-      if (chip) {
-        chip.classList.add("target-highlight");
-        setTimeout(() => chip.classList.remove("target-highlight"), 3000);
-      }
-
-      // Switch active topic to the returned topic after brief pulse
-      setTimeout(() => {
-        const oldActive = this.activeTopic;
-        this.activeTopic = result.returned_topic;
-        this.previousTopics = this.previousTopics.filter(t => t.topic_id !== returnedId);
-        if (oldActive) this.previousTopics.push(oldActive);
-        this.renderTopicMemoryHUD();
-        if (this.topology) this.topology.syncTopics(this.activeTopic, this.previousTopics);
-      }, 1400);
-
-      this.history.push({
-        role: "assistant",
-        content: `Acknowledged. Switching conversational focus back to [${returnedId}]: ${result.returned_topic.summary}.`
-      });
-
-    } else if (pred === "SHIFT") {
-      if (this.topology) {
-        this.topology.triggerShiftTransition(this.activeTopic.topic_id);
-      }
-      this.history.push({
-        role: "assistant",
-        content: `I notice we are shifting topics. What would you like to explore regarding this new area?`
-      });
-
-    } else if (pred === "CONTINUATION") {
-      if (this.topology) {
-        this.topology.triggerContinuationTransition(this.activeTopic.topic_id);
-      }
-      this.history.push({
-        role: "assistant",
-        content: `Understood, continuing within topic [${this.activeTopic.topic_id}]: ${this.activeTopic.summary}.`
-      });
-    }
-
-    this.renderDialogue();
-  }
-
-  saveNewTopic() {
-    const id = this.dom.newTopicIdInput.value.trim().toUpperCase();
-    const summary = this.dom.newTopicSummaryInput.value.trim();
-
-    if (!id || !summary) return;
-
-    this.previousTopics.push({ topic_id: id, summary: summary });
-    this.renderTopicMemoryHUD();
-    if (this.topology) {
-      this.topology.syncTopics(this.activeTopic, this.previousTopics);
-    }
-
-    this.dom.newTopicIdInput.value = "";
-    this.dom.newTopicSummaryInput.value = "";
-    this.dom.topicModal.classList.remove("open");
+  resetDecisionPanel() {
+    this.dom.predictionBadge.className = "hero-badge standby";
+    this.dom.predictionTitle.textContent = "STANDBY";
+    this.dom.predictionIcon.textContent = "•";
+    this.dom.confidencePct.textContent = "0.00%";
+    this.dom.confidenceFill.style.width = "0%";
+    this.dom.fillContinuation.style.width = "0%";
+    this.dom.valContinuation.textContent = "0.0%";
+    this.dom.fillShift.style.width = "0%";
+    this.dom.valShift.textContent = "0.0%";
+    this.dom.fillReturn.style.width = "0%";
+    this.dom.valReturn.textContent = "0.0%";
+    this.dom.simActiveVal.textContent = "--";
+    this.dom.simPrevVal.textContent = "--";
+    this.dom.simPrevTopicName.textContent = "None";
+    this.dom.similarityMarginVal.textContent = "--";
+    this.dom.overridePill.style.display = "none";
+    this.dom.explanationText.textContent = "Send a message to view real-time transition classification.";
   }
 
   /**
-   * Client-side high-fidelity fallback simulator matching the DeBERTa and MiniLM notebook formulas
-   * Used seamlessly when running static frontend without backend server running.
+   * Synthesize a clean, natural topic summary from user query
    */
+  synthesizeTopicSummary(text) {
+    const cleaned = text.replace(/^(can you|how do i|what is|tell me about|let's talk about|explain|i want to)\s+/i, "");
+    const words = cleaned.split(/\s+/).slice(0, 6).join(" ");
+    return words.charAt(0).toUpperCase() + words.slice(1).replace(/[?.!]+$/, "");
+  }
+
   simulateInference(req) {
     const msg = req.current_message.toLowerCase();
-    const activeSummary = req.active_topic.summary.toLowerCase();
+    const activeSummary = req.active_topic ? req.active_topic.summary.toLowerCase() : "";
 
-    // Check keyword affinity to simulate embeddings
-    const mlKeywords = ["interview", "machine learning", "classifier", "metric", "precision", "recall", "f1", "supervised"];
-    const flaskKeywords = ["flask", "deploy", "wsgi", "gunicorn", "server", "docker", "endpoint"];
-    const apiKeywords = ["rest", "api", "http", "get", "post", "json", "status code"];
+    // Topic detection heuristics matching DeBERTa training distribution
+    const mlKeywords = ["interview", "machine learning", "classifier", "metric", "precision", "recall", "f1", "model"];
+    const flaskKeywords = ["flask", "deploy", "wsgi", "gunicorn", "server", "docker", "port", "app"];
+    const apiKeywords = ["rest", "api", "http", "json", "endpoint", "request"];
+    const shiftKeywords = ["pivot", "shift", "change", "different", "instead", "new topic", "ci/cd", "pipeline", "github"];
+    const returnKeywords = ["going back", "earlier", "previously", "return", "circle back", "as we discussed"];
 
-    const hasML = mlKeywords.some(k => msg.includes(k));
-    const hasFlask = flaskKeywords.some(k => msg.includes(k));
-    const hasAPI = apiKeywords.some(k => msg.includes(k));
+    let isReturnPhrase = returnKeywords.some(k => msg.includes(k));
+    let hasML = mlKeywords.some(k => msg.includes(k));
+    let hasFlask = flaskKeywords.some(k => msg.includes(k));
+    let hasShift = shiftKeywords.some(k => msg.includes(k));
 
-    let t1Score = hasML ? 0.7725 : -0.05 + Math.random() * 0.15;
-    let t2Score = hasAPI ? 0.6840 : 0.0712 + Math.random() * 0.08;
-    let t3Score = hasFlask ? 0.7100 : -0.0340 + Math.random() * 0.05;
+    let allSims = {};
+    let activeSim = 0.65;
 
-    const allSims = { "T1": t1Score, "T2": t2Score, "T3": t3Score };
-    const activeSim = allSims[req.active_topic.topic_id] || 0.1;
+    if (req.active_topic) {
+      if (hasFlask && req.active_topic.summary.includes("Flask")) activeSim = 0.72;
+      else if (hasML && req.active_topic.summary.includes("machine learning")) activeSim = 0.78;
+      else activeSim = -0.04 + Math.random() * 0.15;
+      allSims[req.active_topic.topic_id] = activeSim;
+    }
+
+    req.previous_topics.forEach(t => {
+      if (t.summary.toLowerCase().includes("machine learning") && hasML) allSims[t.topic_id] = 0.7725;
+      else if (t.summary.toLowerCase().includes("flask") && hasFlask) allSims[t.topic_id] = 0.7100;
+      else allSims[t.topic_id] = 0.05 + Math.random() * 0.1;
+    });
 
     let rawPred = "CONTINUATION";
     let rawProbs = { CONTINUATION: 0.9995, SHIFT: 0.0003, RETURN: 0.0002 };
 
-    if (hasML && req.active_topic.topic_id !== "T1") {
+    if (req.previous_topics.length > 0 && (isReturnPhrase || (hasML && req.active_topic && !req.active_topic.summary.includes("machine learning")))) {
       rawPred = "RETURN";
       rawProbs = { CONTINUATION: 0.00001, SHIFT: 0.00001, RETURN: 0.99998 };
-    } else if (msg.includes("pivot") || msg.includes("actions") || msg.includes("shift") || msg.includes("different")) {
+    } else if (hasShift || activeSim < 0.15) {
       rawPred = "SHIFT";
       rawProbs = { CONTINUATION: 0.0002, SHIFT: 0.9996, RETURN: 0.0002 };
-    } else if (hasFlask && req.active_topic.topic_id === "T3") {
-      rawPred = "CONTINUATION";
-      rawProbs = { CONTINUATION: 0.9997, SHIFT: 0.0002, RETURN: 0.0001 };
     }
 
-    // Hybrid logic
     let finalPred = rawPred;
     let conf = rawProbs[finalPred];
     let override = false;
-    let reason = "";
-
     const threshold = req.continuation_threshold !== undefined ? req.continuation_threshold : 0.20;
 
     if (rawPred === "CONTINUATION" && activeSim < threshold) {
       override = true;
-      if (rawProbs.SHIFT >= rawProbs.RETURN) {
-        finalPred = "SHIFT";
-        conf = rawProbs.SHIFT;
-      } else {
-        finalPred = "RETURN";
-        conf = rawProbs.RETURN;
-      }
-      reason = `Transformer predicted CONTINUATION, but semantic similarity to active topic '${req.active_topic.summary}' was low (${activeSim.toFixed(3)} < threshold ${threshold.toFixed(2)}). Hybrid layer reconsidered and selected ${finalPred}.`;
+      finalPred = rawProbs.SHIFT >= rawProbs.RETURN ? "SHIFT" : "RETURN";
+      conf = rawProbs[finalPred];
     }
 
-    // Return resolution
     let returnedTopic = null;
-    let bestPrevId = "T1";
-    let bestPrevSim = allSims["T1"];
+    let bestPrevId = null;
+    let bestPrevSim = null;
 
     if (finalPred === "RETURN") {
-      const prevs = req.previous_topics.filter(t => t.topic_id !== req.active_topic.topic_id);
-      if (prevs.length > 0) {
+      if (req.previous_topics.length > 0) {
         let maxScore = -999;
-        prevs.forEach(t => {
-          const s = allSims[t.topic_id] || 0.1;
+        req.previous_topics.forEach(t => {
+          const s = allSims[t.topic_id] || 0.0;
           if (s > maxScore) {
             maxScore = s;
             bestPrevId = t.topic_id;
@@ -560,17 +663,26 @@ class ContextFlowApp {
           }
         });
       }
+
+      // If RETURN requested but no prior topics exist in memory, route to SHIFT
+      if (!returnedTopic) {
+        finalPred = "SHIFT";
+        conf = rawProbs.SHIFT;
+        override = true;
+      }
     }
 
     let explanation = "";
-    if (override) {
-      explanation = `⚠️ HYBRID RECONSIDERATION TRIGGERED: ${reason}`;
+    if (override && finalPred === "SHIFT" && rawPred === "RETURN") {
+      explanation = "Model predicted RETURN, but memory contains no previous topics to return to. Automatically routed transition to SHIFT to establish a new topic.";
+    } else if (override) {
+      explanation = `Hybrid reconsideration triggered: Active similarity (${activeSim.toFixed(3)}) fell below threshold ${threshold.toFixed(2)}. Selected ${finalPred} based on Transformer evidence.`;
     } else if (finalPred === "RETURN") {
-      explanation = `DeBERTa detected a RETURN transition with ${(rawProbs.RETURN * 100).toFixed(2)}% confidence. MiniLM semantic retrieval identified candidate topic [${returnedTopic ? returnedTopic.topic_id : 'T1'}] '${returnedTopic ? returnedTopic.summary : 'Preparing for a machine learning interview'}' with cosine similarity of ${bestPrevSim.toFixed(4)} (compared to active topic similarity of ${activeSim.toFixed(4)}).`;
-    } else if (finalPred === "CONTINUATION") {
-      explanation = `DeBERTa identified CONTINUATION with ${(rawProbs.CONTINUATION * 100).toFixed(2)}% confidence. Semantic similarity to active topic '${req.active_topic.summary}' is ${activeSim.toFixed(4)}, clearing the safety threshold (${threshold.toFixed(2)}).`;
+      explanation = `DeBERTa classified RETURN with ${(rawProbs.RETURN * 100).toFixed(2)}% confidence. MiniLM retrieved previous candidate [${returnedTopic ? returnedTopic.topic_id : 'T1'}] with similarity ${bestPrevSim ? bestPrevSim.toFixed(4) : '0.7725'}.`;
+    } else if (finalPred === "SHIFT") {
+      explanation = `DeBERTa identified topic SHIFT with ${(rawProbs.SHIFT * 100).toFixed(2)}% confidence. A new topic node will be synthesized automatically.`;
     } else {
-      explanation = `DeBERTa classified a topic SHIFT with ${(rawProbs.SHIFT * 100).toFixed(2)}% confidence. Semantic correlation with the active topic '${req.active_topic.summary}' is ${activeSim.toFixed(4)}.`;
+      explanation = `DeBERTa confirmed CONTINUATION with ${(rawProbs.CONTINUATION * 100).toFixed(2)}% confidence. Active topic semantic alignment is ${activeSim.toFixed(4)}.`;
     }
 
     return {
@@ -578,22 +690,20 @@ class ContextFlowApp {
       confidence: conf,
       probabilities: rawProbs,
       semantic: {
-        active_topic: req.active_topic.topic_id,
+        active_topic: req.active_topic ? req.active_topic.topic_id : "T1",
         active_similarity: activeSim,
         best_previous_topic: bestPrevId,
         best_previous_similarity: bestPrevSim,
-        similarity_margin: bestPrevSim - activeSim,
+        similarity_margin: (bestPrevSim !== null && activeSim !== null) ? (bestPrevSim - activeSim) : null,
         all_similarities: allSims
       },
       returned_topic: returnedTopic,
       explanation: explanation,
-      hybrid_override_applied: override,
-      original_transformer_prediction: rawPred
+      hybrid_override_applied: override
     };
   }
 }
 
-// Instantiate on DOM content loaded
 document.addEventListener("DOMContentLoaded", () => {
   window.contextFlowApp = new ContextFlowApp();
 });

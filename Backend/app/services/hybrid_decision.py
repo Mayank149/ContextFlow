@@ -71,8 +71,24 @@ class HybridDecisionEngine:
         override_applied = False
         reconsideration_reason = ""
 
-        # 2. Special CONTINUATION check
-        if raw_pred == "CONTINUATION" and active_sim < threshold:
+        # Highest semantic similarity observed across all topics in memory
+        max_all_sim = max(all_similarities.values()) if all_similarities else -1.0
+
+        # 2. Global Novelty Check:
+        # If the incoming message's similarity with ALL topics in memory is lower than the threshold,
+        # it represents a completely new topic area and must be routed as a SHIFT.
+        if max_all_sim < threshold:
+            final_prediction = "SHIFT"
+            final_confidence = raw_probs.get("SHIFT", raw_conf)
+            override_applied = True
+            reconsideration_reason = (
+                f"Semantic similarity across all topics in memory was below threshold {threshold:.2f} "
+                f"(highest similarity: {max_all_sim:.4f}). "
+                f"ContextFlow routed the transition to SHIFT to register a new topic."
+            )
+
+        # 3. Special CONTINUATION check (if not already triggered by global novelty)
+        elif raw_pred == "CONTINUATION" and active_sim < threshold:
             # Semantic evidence challenges CONTINUATION
             # Reconsider between SHIFT and RETURN based on Transformer probabilities
             shift_prob = raw_probs.get("SHIFT", 0.0)
@@ -98,13 +114,28 @@ class HybridDecisionEngine:
                     f"({return_prob:.4f} vs SHIFT {shift_prob:.4f})."
                 )
 
-        # 3. RETURN Topic Identification
+        # 4. RETURN Topic Identification & Verification
         returned_topic: Optional[Topic] = None
-        if final_prediction == "RETURN" and best_prev_id is not None:
-            for t in previous_topics:
-                if t.topic_id == best_prev_id:
-                    returned_topic = t
-                    break
+        if final_prediction == "RETURN":
+            if best_prev_id is not None:
+                for t in previous_topics:
+                    if t.topic_id == best_prev_id:
+                        returned_topic = t
+                        break
+
+            # If model or hybrid predicts RETURN but there are no historical topics to return to,
+            # or the best previous topic similarity is below threshold,
+            # route to SHIFT so a new topic is established.
+            if returned_topic is None or (best_prev_sim is not None and best_prev_sim < threshold):
+                final_prediction = "SHIFT"
+                final_confidence = raw_probs.get("SHIFT", raw_conf)
+                override_applied = True
+                sim_str = f"{best_prev_sim:.4f}" if best_prev_sim is not None else "N/A"
+                reconsideration_reason = (
+                    f"A RETURN transition was evaluated, but similarity with historical topics was below threshold "
+                    f"({sim_str} < {threshold:.2f}). "
+                    f"ContextFlow routed the transition to SHIFT to establish a new topic."
+                )
 
         # 4. Generate Explainability Narrative
         explanation = self._build_explanation(

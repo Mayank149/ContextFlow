@@ -3,309 +3,319 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ContextFlow — Conversation Transition & Semantic Context Intelligence</title>
-  <meta name="description" content="State-of-the-art conversational transition detection powered by fine-tuned DeBERTa-v3 and MiniLM semantic topic retrieval with hybrid decision logic.">
+  <title>ContextFlow — Conversational Transition Intelligence</title>
+  <meta name="description" content="AI Chatbot with real-time conversation transition detection, DeBERTa sequence classification, and MiniLM semantic context routing.">
   
-  <!-- Modern Editorial & Monospace Typography -->
+  <!-- Modern Clean Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   
-  <!-- Three.js for 3D Topic Visualization -->
+  <!-- Three.js for 3D Topic Topology -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-  <!-- Main Stylesheet -->
+  <!-- Stylesheet -->
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="theme-warm-editorial">
-  <div class="grain-overlay"></div>
+<body class="theme-obsidian-emerald">
+  <div class="glow-bg-mesh"></div>
 
-  <!-- Header & Status Bar -->
+  <!-- App Header -->
   <header class="app-header">
     <div class="brand-section">
       <div class="brand-glyph">
         <span class="glyph-core"></span>
-        <span class="glyph-ring"></span>
+        <span class="glyph-aura"></span>
       </div>
       <div class="brand-text">
-        <h1 class="brand-title">CONTEXTFLOW</h1>
-        <p class="brand-subtitle">Transition Detection &bull; Hybrid Semantic Context Intelligence</p>
+        <h1 class="brand-title">ContextFlow</h1>
+        <span class="brand-badge">DeBERTa-v3 &bull; MiniLM</span>
       </div>
     </div>
 
-    <!-- Scenarios and Backend Connection Indicator -->
+    <!-- Header Tools: Scenario Loader & Status -->
     <div class="header-controls">
-      <div class="scenario-selector-wrapper">
-        <label for="scenarioSelect" class="control-label">Demo Scenario:</label>
-        <select id="scenarioSelect" class="editorial-select">
-          <option value="return_ml">Benchmark 1: Flask &rarr; RETURN to ML Interview</option>
+      <div class="baseline-dropdown-wrap">
+        <span class="control-label">Load Baseline Demo:</span>
+        <select id="baselineSelect" class="cyber-select">
+          <option value="empty" selected>Start Fresh (Empty Chat)</option>
+          <option value="return_ml">Benchmark 1: Flask &rarr; RETURN to ML</option>
           <option value="shift_cloud">Benchmark 2: ML &rarr; SHIFT to REST APIs</option>
           <option value="continuation_normal">Benchmark 3: Active CONTINUATION on Flask</option>
-          <option value="hybrid_override">Benchmark 4: Suspicious CONTINUATION &rarr; Hybrid Reconsideration</option>
-          <option value="custom">Custom Dialogue Session</option>
+          <option value="hybrid_override">Benchmark 4: Hybrid Reconsideration Trigger</option>
         </select>
       </div>
 
-      <div class="status-indicator-box">
-        <span class="status-dot online" id="serverStatusDot"></span>
-        <span class="status-text" id="serverStatusText">Backend: Connecting...</span>
+      <div class="server-status-pill" id="serverStatusPill">
+        <span class="pulse-dot" id="serverStatusDot"></span>
+        <span id="serverStatusText">Connecting to CPU Backend...</span>
       </div>
     </div>
   </header>
 
-  <!-- Main Application Workspace (3-Column Layout) -->
+  <!-- Main 3-Column Workspace -->
   <main class="app-workspace">
 
-    <!-- LEFT PANEL: Conversation Dialogue & Turns -->
-    <section class="panel panel-dialogue" id="conversationPanel">
+    <!-- LEFT PANEL: 3D Topic Topology & Dynamic Topic Memory -->
+    <aside class="panel panel-left-graph" id="graphPanel">
       <div class="panel-header">
         <div class="panel-title-group">
-          <span class="panel-tag">STREAM</span>
-          <h2 class="panel-title">Conversation History</h2>
+          <span class="section-tag green">TOPOLOGY</span>
+          <h2 class="panel-title">Context Space</h2>
         </div>
-        <div class="panel-actions">
-          <button id="clearChatBtn" class="btn-ghost" title="Reset current conversation">Reset</button>
-        </div>
-      </div>
-
-      <div class="dialogue-scroll-area" id="dialogueContainer">
-        <!-- Dialogue messages injected by JS -->
-      </div>
-
-      <!-- Current Message Input Area -->
-      <div class="input-composer">
-        <div class="composer-header">
-          <span class="composer-badge">INCOMING TURN</span>
-          <span class="token-estimate" id="tokenEstimate">~32 tokens</span>
-        </div>
-        <textarea 
-          id="currentMessageInput" 
-          class="message-textarea" 
-          rows="3" 
-          placeholder="Enter current user message to evaluate context transition..."
-        >What metrics should I study for the classifier?</textarea>
-        
-        <div class="composer-footer">
-          <div class="threshold-chip">
-            <span class="chip-label">&tau; Threshold:</span>
-            <span class="chip-val" id="chipThresholdVal">0.20</span>
-          </div>
-          <button id="analyzeBtn" class="btn-primary">
-            <span class="btn-text">Analyze Context</span>
-            <span class="btn-spinner" id="analyzeSpinner"></span>
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- CENTER PANEL: 3D Topic Space & Memory Graph -->
-    <section class="panel panel-center" id="centerVisualizationPanel">
-      <div class="panel-header">
-        <div class="panel-title-group">
-          <span class="panel-tag">3D TOPIC MEMORY</span>
-          <h2 class="panel-title">Dynamic Context Topology</h2>
-        </div>
-        <div class="view-controls">
-          <button id="resetCamBtn" class="btn-icon" title="Reset 3D Camera">&circlearrowright;</button>
-          <button id="toggleWireframeBtn" class="btn-icon" title="Toggle Grid">&boxplus;</button>
+        <div class="graph-quick-tools">
+          <button id="resetCamBtn" class="btn-icon" title="Reset Camera View">&circlearrowright;</button>
+          <button id="toggleGraphFullBtn" class="btn-icon" title="Toggle Graph Focus">&boxbox;</button>
         </div>
       </div>
 
-      <!-- Interactive 3D Canvas Container -->
+      <!-- 3D Canvas Viewport -->
       <div class="canvas-viewport" id="canvasViewport">
         <div class="canvas-legend">
-          <span class="legend-item active"><span class="legend-color active"></span> Active Topic</span>
-          <span class="legend-item target"><span class="legend-color target"></span> Returned Target</span>
-          <span class="legend-item previous"><span class="legend-color previous"></span> Stored Topic</span>
+          <span class="legend-item active"><span class="legend-dot active"></span> Active Topic</span>
+          <span class="legend-item returned"><span class="legend-dot returned"></span> Returned</span>
+          <span class="legend-item memory"><span class="legend-dot memory"></span> In Memory</span>
         </div>
         <div id="threeCanvasMount"></div>
-        <div class="viewport-overlay-hint">Drag to orbit &bull; Scroll to zoom</div>
+        <div class="canvas-hint">Drag to rotate &bull; Scroll to zoom</div>
       </div>
 
-      <!-- Memory Context Inspector (Active & Previous Topics) -->
+      <!-- Live Topic Memory HUD -->
       <div class="topic-memory-hud">
-        <div class="active-topic-card">
+        <div class="active-topic-card" id="activeTopicCard">
           <div class="topic-card-header">
-            <span class="topic-status-pulse"></span>
-            <span class="topic-label">CURRENT ACTIVE TOPIC</span>
-            <span class="topic-id-badge" id="activeTopicBadge">T3</span>
+            <span class="topic-pulse-ring"></span>
+            <span class="topic-label">ACTIVE CONVERSATION TOPIC</span>
+            <span class="topic-id-pill" id="activeTopicBadge">--</span>
           </div>
-          <p class="topic-summary-text" id="activeTopicSummary">Deploying Flask applications</p>
+          <p class="topic-summary-text" id="activeTopicSummary">No active topic yet. Send a message to start.</p>
         </div>
 
-        <div class="candidate-topics-strip">
-          <div class="strip-header">
-            <span class="strip-title">Candidate Topics in Memory</span>
-            <button id="addTopicModalBtn" class="btn-small-link">+ Add Topic</button>
+        <div class="candidate-topics-section">
+          <div class="candidate-header">
+            <span class="candidate-title">Historical Topics in Memory (<span id="topicCount">0</span>)</span>
+            <span class="auto-tag">Auto-Generated</span>
           </div>
-          <div class="topics-list-container" id="candidateTopicsList">
-            <!-- Candidate cards injected by JS -->
+          <div class="candidate-chips-container" id="candidateTopicsList">
+            <div class="empty-topics-state" id="emptyTopicsMsg">
+              Topics are automatically discovered and registered when shifts occur.
+            </div>
           </div>
         </div>
+      </div>
+    </aside>
+
+    <!-- CENTER PANEL: Normal LLM Chatbot Interface -->
+    <section class="panel panel-chat" id="chatPanel">
+      <div class="panel-header chat-header">
+        <div class="chat-agent-info">
+          <div class="agent-avatar">
+            <span class="avatar-ring"></span>
+            <span class="avatar-core">CF</span>
+          </div>
+          <div>
+            <h2 class="agent-name">ContextFlow Assistant</h2>
+            <p class="agent-sub" id="chatSubStatus">Ready for conversation</p>
+          </div>
+        </div>
+        <div class="chat-header-actions">
+          <button id="viewGraphBtn" class="btn-secondary-pill">
+            <span class="btn-icon-text">🪐</span> View Topic Graph
+          </button>
+          <button id="clearChatBtn" class="btn-ghost-pill" title="Clear Chat History">Clear Chat</button>
+        </div>
+      </div>
+
+      <!-- Dialogue Messages Stream -->
+      <div class="chat-messages-stream" id="chatMessagesStream">
+        <div class="chat-welcome-banner" id="chatWelcomeBanner">
+          <div class="welcome-icon">💬</div>
+          <h3>Welcome to ContextFlow</h3>
+          <p>
+            Start a natural conversation. The fine-tuned <strong>DeBERTa-v3</strong> model and <strong>MiniLM</strong> semantic layer will continuously track context transitions, detect topic shifts, and seamlessly route historical context when you return to earlier discussions.
+          </p>
+          <div class="quick-starters">
+            <button class="starter-chip" data-msg="I'm preparing for a machine learning interview. What core topics should I study?">
+              "ML Interview Preparation"
+            </button>
+            <button class="starter-chip" data-msg="How do I deploy a Flask application in production with Gunicorn and Docker?">
+              "Deploying Flask App"
+            </button>
+            <button class="starter-chip" data-msg="Can you explain how database B-tree indexing works for SQL queries?">
+              "Database Indexing"
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Input Composer (Clears on Send) -->
+      <div class="chat-input-composer">
+        <div class="composer-active-context-bar">
+          <span class="context-indicator-dot"></span>
+          <span class="context-indicator-text">Active Topic:</span>
+          <strong id="composerActiveTopic">None (Fresh Start)</strong>
+        </div>
+
+        <form id="chatForm" class="composer-form">
+          <textarea 
+            id="chatInput" 
+            class="composer-textarea" 
+            rows="2" 
+            placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
+          ></textarea>
+          
+          <button type="submit" id="sendBtn" class="btn-send" title="Send message">
+            <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+            <span class="send-spinner" id="sendSpinner"></span>
+          </button>
+        </form>
       </div>
     </section>
 
-    <!-- RIGHT PANEL: Decision Engine & Explainability -->
-    <section class="panel panel-decision" id="decisionPanel">
+    <!-- RIGHT PANEL: Decision & Evidence Panel -->
+    <aside class="panel panel-decision" id="decisionPanel">
       <div class="panel-header">
         <div class="panel-title-group">
-          <span class="panel-tag">INFERENCE ENGINE</span>
+          <span class="section-tag purple">INFERENCE</span>
           <h2 class="panel-title">Decision &amp; Evidence</h2>
         </div>
-        <div class="latency-badge" id="inferenceLatency">ready</div>
+        <div class="latency-pill" id="inferenceLatency">Ready</div>
       </div>
 
       <div class="decision-scroll-area">
         
-        <!-- Primary Decision Hero Banner -->
+        <!-- Transition Hero Banner -->
         <div class="transition-hero" id="transitionHero">
-          <span class="hero-label">PREDICTED TRANSITION</span>
-          <div class="hero-prediction-badge" id="predictionBadge">
-            <span class="prediction-icon" id="predictionIcon">&bull;</span>
-            <span class="prediction-title" id="predictionTitle">STANDBY</span>
+          <span class="hero-label">DETECTED TRANSITION</span>
+          <div class="hero-badge standby" id="predictionBadge">
+            <span class="badge-icon" id="predictionIcon">&bull;</span>
+            <span class="badge-text" id="predictionTitle">STANDBY</span>
           </div>
-          <div class="hero-confidence-bar-wrap">
-            <div class="confidence-labels">
-              <span>Model Confidence</span>
+
+          <div class="confidence-container">
+            <div class="confidence-header">
+              <span>Transition Confidence</span>
               <span id="confidencePct">0.00%</span>
             </div>
             <div class="confidence-track">
-              <div class="confidence-fill" id="confidenceFill" style="width: 0%;"></div>
+              <div class="confidence-bar" id="confidenceFill" style="width: 0%;"></div>
             </div>
           </div>
         </div>
 
-        <!-- DeBERTa-v3 Transformer Probabilities -->
-        <div class="metric-card">
-          <div class="card-title-row">
-            <h3 class="card-title">DeBERTa-v3 Transformer Distribution</h3>
-            <span class="model-tag">Primary Classifier</span>
+        <!-- DeBERTa Probabilities -->
+        <div class="glass-card">
+          <div class="card-header-row">
+            <h3 class="card-heading">DeBERTa-v3 Distribution</h3>
+            <span class="card-sub-tag">Primary Classifier</span>
           </div>
 
-          <div class="probability-bars">
-            <div class="prob-row" id="rowContinuation">
-              <div class="prob-meta">
+          <div class="prob-distribution">
+            <div class="prob-item" id="rowContinuation">
+              <div class="prob-info">
                 <span class="prob-name">CONTINUATION</span>
-                <span class="prob-value" id="valContinuation">0.0%</span>
+                <span class="prob-num" id="valContinuation">0.0%</span>
               </div>
               <div class="prob-track">
-                <div class="prob-fill continuation" id="fillContinuation" style="width: 0%;"></div>
+                <div class="prob-fill fill-continuation" id="fillContinuation" style="width: 0%;"></div>
               </div>
             </div>
 
-            <div class="prob-row" id="rowShift">
-              <div class="prob-meta">
+            <div class="prob-item" id="rowShift">
+              <div class="prob-info">
                 <span class="prob-name">SHIFT</span>
-                <span class="prob-value" id="valShift">0.0%</span>
+                <span class="prob-num" id="valShift">0.0%</span>
               </div>
               <div class="prob-track">
-                <div class="prob-fill shift" id="fillShift" style="width: 0%;"></div>
+                <div class="prob-fill fill-shift" id="fillShift" style="width: 0%;"></div>
               </div>
             </div>
 
-            <div class="prob-row" id="rowReturn">
-              <div class="prob-meta">
+            <div class="prob-item" id="rowReturn">
+              <div class="prob-info">
                 <span class="prob-name">RETURN</span>
-                <span class="prob-value" id="valReturn">0.0%</span>
+                <span class="prob-num" id="valReturn">0.0%</span>
               </div>
               <div class="prob-track">
-                <div class="prob-fill return" id="fillReturn" style="width: 0%;"></div>
+                <div class="prob-fill fill-return" id="fillReturn" style="width: 0%;"></div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- MiniLM Semantic Verification & Retrieval -->
-        <div class="metric-card">
-          <div class="card-title-row">
-            <h3 class="card-title">MiniLM Semantic Supporting Layer</h3>
-            <span class="model-tag">all-MiniLM-L6-v2</span>
+        <!-- MiniLM Semantic Evidence -->
+        <div class="glass-card">
+          <div class="card-header-row">
+            <h3 class="card-heading">MiniLM Semantic Verification</h3>
+            <span class="card-sub-tag">all-MiniLM-L6-v2</span>
           </div>
 
-          <div class="semantic-gauges-grid">
-            <div class="gauge-box">
-              <span class="gauge-label">Active Topic Similarity</span>
-              <div class="gauge-value" id="simActiveVal">--</div>
-              <span class="gauge-sub" id="simActiveSub">Current topic similarity</span>
+          <div class="metrics-grid">
+            <div class="metric-tile">
+              <span class="tile-label">Active Topic Cosine</span>
+              <div class="tile-val" id="simActiveVal">--</div>
+              <span class="tile-desc">Current message correlation</span>
             </div>
 
-            <div class="gauge-box">
-              <span class="gauge-label">Best Previous Topic</span>
-              <div class="gauge-value highlight" id="simPrevVal">--</div>
-              <span class="gauge-sub" id="simPrevTopicName">None</span>
+            <div class="metric-tile highlight-purple">
+              <span class="tile-label">Best Historical Topic</span>
+              <div class="tile-val" id="simPrevVal">--</div>
+              <span class="tile-desc" id="simPrevTopicName">None</span>
             </div>
           </div>
 
-          <div class="margin-indicator" id="marginIndicator">
-            <div class="margin-meta">
+          <div class="delta-box" id="deltaBox">
+            <div class="delta-row">
               <span>Similarity Margin (&Delta;):</span>
-              <span id="similarityMarginVal">--</span>
+              <span class="delta-value" id="similarityMarginVal">--</span>
             </div>
-            <p class="margin-explainer">Difference between candidate topic similarity and active topic similarity.</p>
+            <p class="delta-explainer">Difference between candidate topic similarity and active topic similarity.</p>
           </div>
         </div>
 
-        <!-- Explainability Narrative -->
-        <div class="metric-card explainability-card" id="explainabilityCard">
-          <div class="card-title-row">
-            <h3 class="card-title">Hybrid Reasoning Explanation</h3>
-            <span class="override-pill" id="overridePill" style="display: none;">Override Applied</span>
+        <!-- Hybrid Explainability Narrative -->
+        <div class="glass-card explainability-card">
+          <div class="card-header-row">
+            <h3 class="card-heading">Hybrid Reasoning</h3>
+            <span class="override-tag" id="overridePill" style="display: none;">Override Applied</span>
           </div>
-          <p class="explanation-text" id="explanationText">
-            Execute context inference to observe the DeBERTa sequence classification combined with MiniLM cosine retrieval.
+          <p class="explain-text" id="explanationText">
+            Send a message to view the hybrid reasoning uniting DeBERTa's sequence prediction with MiniLM cosine retrieval.
           </p>
         </div>
 
-        <!-- Hybrid Threshold Tuner -->
-        <div class="metric-card settings-card">
-          <div class="card-title-row">
-            <h3 class="card-title">Hybrid Threshold Tuning</h3>
-            <span class="threshold-display" id="thresholdDisplay">0.20</span>
+        <!-- Threshold Setting -->
+        <div class="glass-card threshold-card">
+          <div class="card-header-row">
+            <h3 class="card-heading">Continuation Threshold (&tau;)</h3>
+            <span class="threshold-badge" id="thresholdDisplay">0.20</span>
           </div>
-          <p class="settings-helper">
-            Adjust the threshold (&tau;) below which a DeBERTa CONTINUATION is challenged by semantic topic distance:
+          <p class="threshold-help">
+            If DeBERTa predicts CONTINUATION but active topic similarity falls below &tau;, ContextFlow reconsiders the decision:
           </p>
           <input 
             type="range" 
             id="thresholdSlider" 
-            class="editorial-slider" 
+            class="cyber-slider" 
             min="0.00" 
             max="0.60" 
             step="0.05" 
             value="0.20"
           >
-          <div class="slider-marks">
-            <span>0.00 (Strict DeBERTa)</span>
+          <div class="slider-ticks">
+            <span>0.00 (Strict)</span>
             <span>0.20 (Default)</span>
             <span>0.60 (Aggressive)</span>
           </div>
         </div>
 
       </div>
-    </section>
+    </aside>
 
   </main>
-
-  <!-- Add Custom Topic Modal -->
-  <div class="modal-backdrop" id="topicModal">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3 class="modal-title">Register New Topic Candidate</h3>
-        <button id="closeModalBtn" class="btn-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <label for="newTopicIdInput" class="input-label">Topic ID (e.g. T4):</label>
-        <input type="text" id="newTopicIdInput" class="editorial-input" placeholder="T4">
-
-        <label for="newTopicSummaryInput" class="input-label">Topic Summary / Scope:</label>
-        <textarea id="newTopicSummaryInput" class="editorial-textarea" rows="3" placeholder="Database indexing, B-trees, and query optimization"></textarea>
-      </div>
-      <div class="modal-footer">
-        <button id="cancelModalBtn" class="btn-ghost">Cancel</button>
-        <button id="saveTopicBtn" class="btn-primary">Register Topic</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Scripts -->
   <script src="visualization.js"></script>

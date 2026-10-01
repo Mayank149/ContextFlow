@@ -1,78 +1,72 @@
 /**
  * ContextFlow 3D Context Topology Visualization
- * Pure Three.js implementation with zero external orbit control dependencies.
- * Visualizes conversational topics as floating orbital nodes with radiant transition arcs.
+ * Modern & Subtle Cybernetic Obsidian Design.
+ * Features frosted crystalline nodes, delicate ethereal halos, and radiant transition beams.
  */
 
 class ContextTopologyVisualization {
   constructor(containerId) {
     this.container = document.getElementById(containerId);
-    if (!this.container) {
-      console.error("Canvas mount container not found:", containerId);
-      return;
-    }
+    if (!this.container) return;
 
     this.scene = null;
     this.camera = null;
     this.renderer = null;
-    this.nodes = new Map(); // topic_id -> { mesh, glow, labelSprite, ring, data }
+    this.nodes = new Map(); // topic_id -> { mesh, innerGlow, halo, labelSprite, ring, data }
     this.links = []; // Array of { lineMesh, startNode, endNode, curve }
     this.activePulseParticles = [];
-    this.raycaster = new THREE.Raycaster();
-    this.mouse = new THREE.Vector2(-999, -999);
+    this.dust = null;
 
-    // Orbit & Camera Interaction State
+    // Camera Orbit State
     this.isDragging = false;
     this.previousMousePosition = { x: 0, y: 0 };
-    this.cameraDistance = 42;
-    this.targetRotation = { x: 0.25, y: 0.4 };
-    this.currentRotation = { x: 0.25, y: 0.4 };
-    this.showGrid = true;
-    this.gridHelper = null;
+    this.cameraDistance = 38;
+    this.targetRotation = { x: 0.22, y: 0.35 };
+    this.currentRotation = { x: 0.22, y: 0.35 };
 
     this.init();
   }
 
   init() {
-    const width = this.container.clientWidth || 600;
-    const height = this.container.clientHeight || 450;
+    const width = this.container.clientWidth || 360;
+    const height = this.container.clientHeight || 380;
 
     // 1. Scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x090b0e);
-    this.scene.fog = new THREE.FogExp2(0x090b0e, 0.015);
+    this.scene.background = new THREE.Color(0x040806);
+    this.scene.fog = new THREE.FogExp2(0x040806, 0.016);
 
     // 2. Camera
     this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
     this.updateCameraPosition();
 
     // 3. Renderer
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.container.appendChild(this.renderer.domElement);
 
-    // 4. Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+    // 4. Lights - Subtle emerald & violet cyber ambient
+    const ambientLight = new THREE.AmbientLight(0xd1fae5, 0.6);
     this.scene.add(ambientLight);
 
-    const pointLight = new THREE.PointLight(0xffeedd, 1.2, 100);
-    pointLight.position.set(20, 30, 20);
-    this.scene.add(pointLight);
+    const greenPointLight = new THREE.PointLight(0x00ff88, 1.4, 70);
+    greenPointLight.position.set(15, 20, 15);
+    this.scene.add(greenPointLight);
 
-    const blueLight = new THREE.PointLight(0x7c3aed, 0.9, 80);
-    blueLight.position.set(-20, -10, -20);
-    this.scene.add(blueLight);
+    const purplePointLight = new THREE.PointLight(0xa855f7, 1.2, 70);
+    purplePointLight.position.set(-15, -15, -15);
+    this.scene.add(purplePointLight);
 
     // 5. Delicate Celestial Grid
-    this.gridHelper = new THREE.GridHelper(60, 30, 0x1f2430, 0x141822);
-    this.gridHelper.position.y = -10;
-    this.scene.add(this.gridHelper);
+    const grid = new THREE.GridHelper(50, 25, 0x064e3b, 0x071b12);
+    grid.position.y = -8;
+    this.scene.add(grid);
 
-    // 6. Ambient Floating Dust Particles
-    this.createDustParticles();
+    // 6. Ethereal ambient stardust
+    this.createStardust();
 
-    // 7. Event Listeners
+    // 7. Event Handlers
     this.setupInteractions();
     window.addEventListener('resize', () => this.onWindowResize());
 
@@ -101,24 +95,18 @@ class ContextTopologyVisualization {
     });
 
     el.addEventListener('mousemove', (e) => {
-      const rect = el.getBoundingClientRect();
-      this.mouse.x = ((e.clientX - rect.left) / el.clientWidth) * 2 - 1;
-      this.mouse.y = -((e.clientY - rect.top) / el.clientHeight) * 2 + 1;
-
       if (!this.isDragging) return;
-
       const deltaX = e.clientX - this.previousMousePosition.x;
       const deltaY = e.clientY - this.previousMousePosition.y;
 
-      this.targetRotation.y += deltaX * 0.007;
-      this.targetRotation.x = Math.max(-1.4, Math.min(1.4, this.targetRotation.x + deltaY * 0.007));
-
+      this.targetRotation.y += deltaX * 0.006;
+      this.targetRotation.x = Math.max(-1.4, Math.min(1.4, this.targetRotation.x + deltaY * 0.006));
       this.previousMousePosition = { x: e.clientX, y: e.clientY };
     });
 
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
-      this.cameraDistance = Math.max(15, Math.min(80, this.cameraDistance + e.deltaY * 0.04));
+      this.cameraDistance = Math.max(16, Math.min(70, this.cameraDistance + e.deltaY * 0.035));
     }, { passive: false });
   }
 
@@ -131,21 +119,21 @@ class ContextTopologyVisualization {
     this.renderer.setSize(width, height);
   }
 
-  createDustParticles() {
-    const particleCount = 200;
+  createStardust() {
+    const count = 160;
     const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
+    const positions = new Float32Array(count * 3);
 
-    for (let i = 0; i < particleCount * 3; i += 3) {
-      positions[i] = (Math.random() - 0.5) * 80;
-      positions[i + 1] = (Math.random() - 0.5) * 40;
-      positions[i + 2] = (Math.random() - 0.5) * 80;
+    for (let i = 0; i < count * 3; i += 3) {
+      positions[i] = (Math.random() - 0.5) * 60;
+      positions[i + 1] = (Math.random() - 0.5) * 35;
+      positions[i + 2] = (Math.random() - 0.5) * 60;
     }
 
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const material = new THREE.PointsMaterial({
-      color: 0xfaecd5,
-      size: 0.35,
+      color: 0x34d399,
+      size: 0.28,
       transparent: true,
       opacity: 0.35,
       blending: THREE.AdditiveBlending
@@ -158,20 +146,15 @@ class ContextTopologyVisualization {
   createLabelSprite(text, isHighlight = false) {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
-    canvas.height = 80;
+    canvas.height = 72;
     const ctx = canvas.getContext('2d');
 
-    ctx.font = 'bold 32px "JetBrains Mono", monospace';
+    ctx.font = 'bold 30px "JetBrains Mono", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Badge pill background
-    ctx.fillStyle = isHighlight ? 'rgba(245, 158, 11, 0.25)' : 'rgba(30, 35, 48, 0.7)';
-    ctx.strokeStyle = isHighlight ? '#f59e0b' : 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = 3;
-    
-    // Draw rounded pill
-    const x = 28, y = 14, w = 200, h = 52, r = 14;
+    // Badge outline
+    const x = 30, y = 12, w = 196, h = 48, r = 12;
     ctx.beginPath();
     ctx.moveTo(x + r, y);
     ctx.lineTo(x + w - r, y);
@@ -183,12 +166,15 @@ class ContextTopologyVisualization {
     ctx.lineTo(x, y + r);
     ctx.quadraticCurveTo(x, y, x + r, y);
     ctx.closePath();
+
+    ctx.fillStyle = isHighlight ? 'rgba(16, 185, 129, 0.22)' : 'rgba(168, 85, 247, 0.18)';
+    ctx.strokeStyle = isHighlight ? '#00ff88' : '#a855f7';
+    ctx.lineWidth = 2.5;
     ctx.fill();
     ctx.stroke();
 
-    // Text
-    ctx.fillStyle = isHighlight ? '#faecd5' : '#e2dfd7';
-    ctx.fillText(text, 128, 40);
+    ctx.fillStyle = '#f0fdf4';
+    ctx.fillText(text, 128, 36);
 
     const texture = new THREE.CanvasTexture(canvas);
     const spriteMaterial = new THREE.SpriteMaterial({
@@ -197,18 +183,19 @@ class ContextTopologyVisualization {
       depthTest: false
     });
     const sprite = new THREE.Sprite(spriteMaterial);
-    sprite.scale.set(6, 1.875, 1);
+    sprite.scale.set(5.2, 1.46, 1);
     return sprite;
   }
 
   /**
-   * Rebuilds the 3D topic topology given active and previous topics
+   * Rebuilds topic nodes in 3D space
    */
   syncTopics(activeTopic, previousTopics = []) {
-    // 1. Clear old topology meshes
+    // Clear old elements
     for (const [id, node] of this.nodes) {
       this.scene.remove(node.mesh);
-      this.scene.remove(node.glow);
+      this.scene.remove(node.innerGlow);
+      this.scene.remove(node.halo);
       this.scene.remove(node.labelSprite);
       if (node.ring) this.scene.remove(node.ring);
     }
@@ -219,25 +206,27 @@ class ContextTopologyVisualization {
     }
     this.links = [];
 
-    // 2. Position Active Topic at Center (slightly elevated)
+    if (!activeTopic && previousTopics.length === 0) return;
+
+    // 1. Active Topic at Center
     if (activeTopic) {
-      this.createNode(activeTopic, new THREE.Vector3(0, 1.5, 0), true);
+      this.createNode(activeTopic, new THREE.Vector3(0, 1.2, 0), true);
     }
 
-    // 3. Position Previous Topics along an orbital ring
-    const radius = 15;
+    // 2. Previous topics orbiting around
+    const radius = 13;
     const count = previousTopics.length;
 
     previousTopics.forEach((topic, idx) => {
-      const angle = (idx / Math.max(1, count)) * Math.PI * 2 + 0.5;
+      const angle = (idx / Math.max(1, count)) * Math.PI * 2 + 0.4;
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
-      const y = Math.sin(angle * 2) * 3 - 0.5;
+      const y = Math.sin(angle * 2) * 2.2 - 0.5;
 
       this.createNode(topic, new THREE.Vector3(x, y, z), false);
     });
 
-    // 4. Create Curved Celestial Links between Active Topic and Previous Topics
+    // 3. Elegant Bezier links
     const activeNode = activeTopic ? this.nodes.get(activeTopic.topic_id) : null;
     if (activeNode) {
       for (const topic of previousTopics) {
@@ -250,60 +239,74 @@ class ContextTopologyVisualization {
   }
 
   createNode(topicData, position, isActive = false) {
-    const radius = isActive ? 2.2 : 1.6;
+    const radius = isActive ? 1.8 : 1.35;
     const geometry = new THREE.SphereGeometry(radius, 32, 32);
 
-    // Node Material
-    const color = isActive ? 0xf59e0b : 0xa78bfa;
-    const material = new THREE.MeshStandardMaterial({
-      color: color,
-      roughness: 0.25,
-      metalness: 0.6,
-      emissive: color,
-      emissiveIntensity: isActive ? 0.45 : 0.2
+    // Subtle modern frosted glass material
+    const baseColor = isActive ? 0x00ff88 : 0xa855f7;
+    const material = new THREE.MeshPhysicalMaterial({
+      color: baseColor,
+      roughness: 0.15,
+      metalness: 0.1,
+      transmission: 0.6,
+      opacity: 0.85,
+      transparent: true,
+      emissive: baseColor,
+      emissiveIntensity: isActive ? 0.35 : 0.15
     });
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(position);
-    mesh.userData = { topic: topicData, isActive: isActive };
     this.scene.add(mesh);
 
-    // Outer Aura Glow Mesh
-    const glowGeo = new THREE.SphereGeometry(radius * 1.35, 16, 16);
-    const glowMat = new THREE.MeshBasicMaterial({
-      color: color,
+    // Subtle inner glowing core
+    const coreGeo = new THREE.SphereGeometry(radius * 0.55, 16, 16);
+    const coreMat = new THREE.MeshBasicMaterial({
+      color: isActive ? 0xffffff : 0xe9d5ff,
       transparent: true,
-      opacity: isActive ? 0.25 : 0.1,
-      wireframe: true
+      opacity: 0.8
     });
-    const glow = new THREE.Mesh(glowGeo, glowMat);
-    glow.position.copy(position);
-    this.scene.add(glow);
+    const innerGlow = new THREE.Mesh(coreGeo, coreMat);
+    innerGlow.position.copy(position);
+    this.scene.add(innerGlow);
 
-    // Planetary Ring for Active Topic
+    // Subtle outer wire halo
+    const haloGeo = new THREE.SphereGeometry(radius * 1.3, 16, 16);
+    const haloMat = new THREE.MeshBasicMaterial({
+      color: baseColor,
+      wireframe: true,
+      transparent: true,
+      opacity: isActive ? 0.18 : 0.08
+    });
+    const halo = new THREE.Mesh(haloGeo, haloMat);
+    halo.position.copy(position);
+    this.scene.add(halo);
+
+    // Subtle ethereal dashed orbital ring for active topic
     let ring = null;
     if (isActive) {
-      const ringGeo = new THREE.RingGeometry(radius * 1.8, radius * 2.2, 32);
+      const ringGeo = new THREE.RingGeometry(radius * 1.6, radius * 1.8, 32);
       const ringMat = new THREE.MeshBasicMaterial({
-        color: 0xf59e0b,
+        color: 0x00ff88,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.45
+        opacity: 0.35
       });
       ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.rotation.x = Math.PI / 2.6;
+      ring.rotation.x = Math.PI / 2.5;
       ring.position.copy(position);
       this.scene.add(ring);
     }
 
     // Label Sprite
     const labelSprite = this.createLabelSprite(topicData.topic_id, isActive);
-    labelSprite.position.set(position.x, position.y + radius + 1.8, position.z);
+    labelSprite.position.set(position.x, position.y + radius + 1.4, position.z);
     this.scene.add(labelSprite);
 
     this.nodes.set(topicData.topic_id, {
       mesh,
-      glow,
+      innerGlow,
+      halo,
       labelSprite,
       ring,
       data: topicData,
@@ -316,95 +319,79 @@ class ContextTopologyVisualization {
     const posA = nodeA.mesh.position;
     const posB = nodeB.mesh.position;
 
-    // Midpoint control point bowed slightly upward
     const midX = (posA.x + posB.x) / 2;
-    const midY = (posA.y + posB.y) / 2 + 3.5;
+    const midY = (posA.y + posB.y) / 2 + 2.8;
     const midZ = (posA.z + posB.z) / 2;
     const mid = new THREE.Vector3(midX, midY, midZ);
 
     const curve = new THREE.QuadraticBezierCurve3(posA, mid, posB);
-    const points = curve.getPoints(40);
+    const points = curve.getPoints(35);
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
 
     const material = new THREE.LineBasicMaterial({
-      color: 0x3b4254,
+      color: 0x0d3826,
       transparent: true,
-      opacity: 0.55
+      opacity: 0.6
     });
 
     const lineMesh = new THREE.Line(geometry, material);
     this.scene.add(lineMesh);
 
-    this.links.push({
-      lineMesh,
-      curve,
-      nodeA,
-      nodeB
-    });
+    this.links.push({ lineMesh, curve, nodeA, nodeB });
   }
 
   /**
-   * Transition Effect: RETURN
-   * Shoots an electric violet energy pulse along the curve to the target node
+   * Radiant Beam on RETURN
    */
   triggerReturnTransition(activeTopicId, returnedTopicId) {
     const targetNode = this.nodes.get(returnedTopicId);
     const activeNode = this.nodes.get(activeTopicId);
-
     if (!targetNode || !activeNode) return;
 
-    // Highlight target node
+    // Illuminate target node with electric purple
     targetNode.mesh.material.emissive.setHex(0xa855f7);
     targetNode.mesh.material.emissiveIntensity = 0.9;
-    targetNode.glow.material.color.setHex(0xc084fc);
-    targetNode.glow.material.opacity = 0.6;
+    targetNode.halo.material.opacity = 0.5;
 
-    // Spawn 16 pulsating beam particles travelling along the curve
     const matchingLink = this.links.find(
       l => (l.nodeA === activeNode && l.nodeB === targetNode) ||
            (l.nodeA === targetNode && l.nodeB === activeNode)
     );
 
     if (matchingLink) {
-      matchingLink.lineMesh.material.color.setHex(0xa855f7);
+      matchingLink.lineMesh.material.color.setHex(0xc084fc);
       matchingLink.lineMesh.material.opacity = 1.0;
 
-      for (let i = 0; i < 18; i++) {
-        const particleGeo = new THREE.SphereGeometry(0.35, 8, 8);
-        const particleMat = new THREE.MeshBasicMaterial({
-          color: 0xe9d5ff,
+      for (let i = 0; i < 16; i++) {
+        const pGeo = new THREE.SphereGeometry(0.26, 8, 8);
+        const pMat = new THREE.MeshBasicMaterial({
+          color: 0xf5d0fe,
           transparent: true,
           opacity: 0.95
         });
-        const particleMesh = new THREE.Mesh(particleGeo, particleMat);
-        this.scene.add(particleMesh);
+        const pMesh = new THREE.Mesh(pGeo, pMat);
+        this.scene.add(pMesh);
 
         this.activePulseParticles.push({
-          mesh: particleMesh,
+          mesh: pMesh,
           curve: matchingLink.curve,
-          progress: -(i * 0.05), // Staggered entry
-          speed: 0.02,
-          targetNode: targetNode
+          progress: -(i * 0.05),
+          speed: 0.025
         });
       }
     }
   }
 
   /**
-   * Transition Effect: SHIFT
-   * Blooms dynamic expanding ring on new topic
+   * Dynamic Expansion on SHIFT
    */
   triggerShiftTransition(newTopicId) {
     const node = this.nodes.get(newTopicId);
     if (!node) return;
 
-    node.mesh.material.emissive.setHex(0xf59e0b);
-    node.mesh.material.emissiveIntensity = 0.85;
-
-    // Bloom shockwave ring
-    const ringGeo = new THREE.RingGeometry(1, 1.4, 32);
+    const ringGeo = new THREE.RingGeometry(0.8, 1.1, 32);
     const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xf59e0b,
+      color: 0xfbbf24,
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0.8
@@ -416,9 +403,9 @@ class ContextTopologyVisualization {
 
     let scale = 1;
     const expandAnim = () => {
-      scale += 0.2;
+      scale += 0.22;
       ringMesh.scale.set(scale, scale, scale);
-      ringMat.opacity -= 0.035;
+      ringMat.opacity -= 0.04;
       if (ringMat.opacity > 0) {
         requestAnimationFrame(expandAnim);
       } else {
@@ -429,61 +416,53 @@ class ContextTopologyVisualization {
   }
 
   /**
-   * Transition Effect: CONTINUATION
-   * Harmonically pulses active node with jade green glow
+   * Harmonic Breathing Pulse on CONTINUATION
    */
   triggerContinuationTransition(activeTopicId) {
     const node = this.nodes.get(activeTopicId);
     if (!node) return;
 
-    node.mesh.material.emissive.setHex(0x10b981);
-    node.mesh.material.emissiveIntensity = 0.8;
+    node.mesh.material.emissive.setHex(0x00ff88);
+    node.mesh.material.emissiveIntensity = 0.75;
 
     setTimeout(() => {
       if (node.isActive) {
-        node.mesh.material.emissive.setHex(0xf59e0b);
-        node.mesh.material.emissiveIntensity = 0.45;
+        node.mesh.material.emissive.setHex(0x10b981);
+        node.mesh.material.emissiveIntensity = 0.35;
       }
-    }, 1800);
+    }, 1500);
   }
 
   resetCamera() {
-    this.targetRotation = { x: 0.25, y: 0.4 };
-    this.cameraDistance = 42;
-  }
-
-  toggleGrid() {
-    this.showGrid = !this.showGrid;
-    if (this.gridHelper) {
-      this.gridHelper.visible = this.showGrid;
-    }
+    this.targetRotation = { x: 0.22, y: 0.35 };
+    this.cameraDistance = 38;
   }
 
   animate() {
     requestAnimationFrame(this.animate);
-
     const time = performance.now() * 0.001;
 
-    // Smooth camera inertia
+    // Smooth inertia
     this.currentRotation.x += (this.targetRotation.x - this.currentRotation.x) * 0.08;
     this.currentRotation.y += (this.targetRotation.y - this.currentRotation.y) * 0.08;
     this.updateCameraPosition();
 
-    // Subtle idle floating & harmonic breathing
+    // Floating idle oscillation
     for (const [id, node] of this.nodes) {
-      const offset = (id.charCodeAt(id.length - 1) || 1) * 0.7;
-      node.mesh.position.y = node.basePos.y + Math.sin(time * 1.5 + offset) * 0.35;
-      node.glow.position.y = node.mesh.position.y;
-      node.labelSprite.position.y = node.mesh.position.y + (node.isActive ? 4.0 : 3.4);
+      const offset = (id.charCodeAt(id.length - 1) || 1) * 0.6;
+      node.mesh.position.y = node.basePos.y + Math.sin(time * 1.4 + offset) * 0.28;
+      node.innerGlow.position.y = node.mesh.position.y;
+      node.halo.position.y = node.mesh.position.y;
+      node.labelSprite.position.y = node.mesh.position.y + (node.isActive ? 3.3 : 2.8);
 
       if (node.ring) {
         node.ring.position.y = node.mesh.position.y;
-        node.ring.rotation.z += 0.008;
+        node.ring.rotation.z += 0.006;
       }
-      node.glow.rotation.y += 0.005;
+      node.halo.rotation.y += 0.004;
     }
 
-    // Update Return Beam Particles
+    // Pulse beam animation
     for (let i = this.activePulseParticles.length - 1; i >= 0; i--) {
       const p = this.activePulseParticles[i];
       p.progress += p.speed;
@@ -495,15 +474,13 @@ class ContextTopologyVisualization {
       } else if (p.progress < 0) {
         p.mesh.visible = false;
       } else {
-        // Particle completed path
         this.scene.remove(p.mesh);
         this.activePulseParticles.splice(i, 1);
       }
     }
 
-    // Dust gentle drift
     if (this.dust) {
-      this.dust.rotation.y = time * 0.02;
+      this.dust.rotation.y = time * 0.015;
     }
 
     this.renderer.render(this.scene, this.camera);
