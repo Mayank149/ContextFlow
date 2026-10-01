@@ -1,0 +1,1628 @@
+## # ContextFlow Dataset Classification & Modeling
+This notebook demonstrates how to process, analyze, and train a transformer model on the ContextFlow dataset to predict conversation transitions (Continuation, Shift, or Return).
+
+import json
+import pandas as pd
+
+file_path = "/content/contextflow_dataset.jsonl"
+
+records = []
+
+with open(file_path, "r", encoding="utf-8") as f:
+    for line in f:
+        records.append(json.loads(line))
+
+df = pd.DataFrame(records)
+
+print("Number of records:", len(df))
+print("\nColumns:")
+print(df.columns.tolist())
+
+print("\nFirst record:")
+display(df.iloc[0])
+
+### Dataset Analysis & Inspection
+In this step, we read the JSONL dataset and inspect its dimensions, schemas, and a sample record to understand the shape of the dialogues.
+
+df
+
+# Inspect the first record in detail
+
+record = records[0]
+
+print("========== HISTORY ==========\n")
+
+for i, message in enumerate(record["history"]):
+    print(f"{i+1}. {message['role'].upper()}:")
+    print(message["content"])
+    print()
+
+print("\n========== CURRENT MESSAGE ==========\n")
+print(record["current_message"])
+
+print("\n========== ACTIVE TOPIC ==========\n")
+print("Active topic ID:", record["active_topic_id"])
+
+print("\n========== CANDIDATE TOPICS ==========\n")
+
+for topic in record["candidate_topics"]:
+    print("Topic ID:", topic["topic_id"])
+    print("Summary:", topic["topic_summary"])
+    print()
+
+return_record = df[df["label"] == "RETURN"].iloc[0].to_dict()
+
+print("Conversation ID:", return_record["conversation_id"])
+print("Turn ID:", return_record["turn_id"])
+print("Label:", return_record["label"])
+print("Active topic:", return_record["active_topic_id"])
+print("Target topic:", return_record["target_topic_id"])
+print("Return distance:", return_record["return_distance"])
+
+print("\n========== HISTORY ==========\n")
+
+for i, message in enumerate(return_record["history"]):
+    print(f"{i+1}. {message['role'].upper()}:")
+    print(message["content"])
+    print()
+
+print("\n========== CURRENT MESSAGE ==========\n")
+print(return_record["current_message"])
+
+print("\n========== CANDIDATE TOPICS ==========\n")
+
+for topic in return_record["candidate_topics"]:
+    print("Topic ID:", topic["topic_id"])
+    print("Summary:", topic["topic_summary"])
+    print()
+
+history_lengths = df["history"].apply(len)
+
+print("Minimum history messages:", history_lengths.min())
+print("Maximum history messages:", history_lengths.max())
+print("Average history messages:", history_lengths.mean())
+print("Median history messages:", history_lengths.median())
+
+print("\nDistribution:")
+print(history_lengths.value_counts().sort_index())
+
+### Data Distribution Explorations
+We analyze basic statistics such as context length, label distribution, conversational complexity, and source domains to identify balance or potential skewness.
+
+print("========== LABEL DISTRIBUTION ==========\n")
+print(df["label"].value_counts())
+
+print("\n========== LABEL PERCENTAGE ==========\n")
+print(df["label"].value_counts(normalize=True).mul(100).round(2))
+
+print("\n========== DIFFICULTY DISTRIBUTION ==========\n")
+print(df["difficulty"].value_counts())
+
+print("\n========== DOMAIN DISTRIBUTION ==========\n")
+print(df["conversation_domain"].value_counts())
+
+conversation_counts = df.groupby("conversation_id").size()
+
+print("Number of unique conversations:", conversation_counts.nunique())
+print("\nRecords per conversation:")
+print(conversation_counts.value_counts().sort_index())
+
+print("\nMinimum records per conversation:", conversation_counts.min())
+print("Maximum records per conversation:", conversation_counts.max())
+print("Average records per conversation:", conversation_counts.mean())
+
+from sklearn.model_selection import train_test_split
+
+conversation_ids = df["conversation_id"].unique()
+
+print("Total conversations:", len(conversation_ids))
+
+# 80% train, 20% temporary
+train_ids, temp_ids = train_test_split(
+    conversation_ids,
+    test_size=0.20,
+    random_state=42
+)
+
+# Split temporary 50/50 into validation and test
+val_ids, test_ids = train_test_split(
+    temp_ids,
+    test_size=0.50,
+    random_state=42
+)
+
+train_df = df[df["conversation_id"].isin(train_ids)]
+val_df = df[df["conversation_id"].isin(val_ids)].copy()
+test_df = df[df["conversation_id"].isin(test_ids)].copy()
+
+
+print("\nConversations:")
+print("Train:", len(train_ids))
+print("Validation:", len(val_ids))
+print("Test:", len(test_ids))
+
+print("\nRecords:")
+print("Train:", len(train_df))
+print("Validation:", len(val_df))
+print("Test:", len(test_df))
+print("Total:", len(train_df) + len(val_df) + len(test_df))
+
+### Stratified Splitting
+To evaluate model generalizations correctly, we split unique conversations rather than individual turns into training, validation, and testing partitions.
+
+print("========== TRAIN LABELS ==========")
+print(train_df["label"].value_counts())
+print()
+
+print("========== VALIDATION LABELS ==========")
+print(val_df["label"].value_counts())
+print()
+
+print("========== TEST LABELS ==========")
+print(test_df["label"].value_counts())
+print()
+
+print("========== LABEL PERCENTAGES ==========")
+
+for name, split in [
+    ("Train", train_df),
+    ("Validation", val_df),
+    ("Test", test_df)
+]:
+    print(f"\n{name}:")
+    print(
+        split["label"]
+        .value_counts(normalize=True)
+        .mul(100)
+        .round(2)
+    )
+
+Testing input for one example
+
+def get_active_topic_summary(record):
+    active_topic_id = record["active_topic_id"]
+
+    for topic in record["candidate_topics"]:
+        if topic["topic_id"] == active_topic_id:
+            return topic["topic_summary"]
+
+    return None
+
+
+def format_recent_history(history, n_messages=4):
+    recent = history[-n_messages:]
+
+    parts = []
+
+    for message in recent:
+        role = message["role"].capitalize()
+        content = message["content"]
+        parts.append(f"{role}: {content}")
+
+    return "\n".join(parts)
+
+
+def build_model_input(record):
+    recent_context = format_recent_history(record["history"])
+    topic_summary = get_active_topic_summary(record)
+    current_message = record["current_message"]
+
+    return (
+        f"[CLS] "
+        f"{recent_context} "
+        f"[SEP] "
+        f"{topic_summary} "
+        f"[SEP] "
+        f"{current_message} "
+        f"[SEP]"
+    )
+
+
+# Normal example
+print("========== CONTINUATION ==========\n")
+print(build_model_input(records[0]))
+
+# RETURN example
+print("\n\n========== RETURN ==========\n")
+print(build_model_input(return_record))
+
+!pip install -q transformers sentencepiece
+
+## # Model Initialization & Tokenization
+In this section, we prepare the tokenizer and model inputs. We format the raw strings with custom special markers (`[SEP]`) to represent dialogue turn progression and target structures.
+
+from transformers import AutoTokenizer
+
+model_name = "microsoft/deberta-v3-base"
+
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+print("Tokenizer loaded successfully")
+print("Vocabulary size:", tokenizer.vocab_size)
+
+# Testing to see whether 512 tokens are enough
+from tqdm.auto import tqdm
+
+def build_raw_input(record):
+    recent_context = format_recent_history(record["history"], n_messages=4)
+    topic_summary = get_active_topic_summary(record)
+    current_message = record["current_message"]
+
+    return (
+        f"{recent_context} "
+        f"[SEP] "
+        f"{topic_summary} "
+        f"[SEP] "
+        f"{current_message}"
+    )
+
+
+# Measure token lengths
+token_lengths = []
+
+for record in tqdm(records):
+    text = build_raw_input(record)
+
+    tokens = tokenizer(
+        text,
+        add_special_tokens=True,
+        truncation=False
+    )
+
+    token_lengths.append(len(tokens["input_ids"]))
+
+token_lengths = pd.Series(token_lengths)
+
+print("Minimum tokens:", token_lengths.min())
+print("Maximum tokens:", token_lengths.max())
+print("Mean tokens:", round(token_lengths.mean(), 2))
+print("Median tokens:", token_lengths.median())
+
+print("\nPercentiles:")
+print(token_lengths.quantile([0.90, 0.95, 0.99, 0.995, 1.0]))
+
+actually inspect what the tokenizer produces for one example.
+
+example_text = build_raw_input(records[0])
+
+encoded = tokenizer(
+    example_text,
+    add_special_tokens=True,
+    truncation=True,
+    max_length=256
+)
+
+print("Original text:\n")
+print(example_text)
+
+print("\n\nToken IDs:\n")
+print(encoded["input_ids"])
+
+print("\nNumber of tokens:", len(encoded["input_ids"]))
+
+print("\nDecoded back:\n")
+print(tokenizer.decode(encoded["input_ids"]))
+
+label2id = {
+    "CONTINUATION": 0,
+    "SHIFT": 1,
+    "RETURN": 2
+}
+
+id2label = {
+    0: "CONTINUATION",
+    1: "SHIFT",
+    2: "RETURN"
+}
+
+print(label2id)
+print(id2label)
+
+def prepare_record(record):
+    context = format_recent_history(
+        record["history"],
+        n_messages=4
+    )
+
+    topic_summary = get_active_topic_summary(record)
+    current_message = record["current_message"]
+
+    text = (
+        f"{context} "
+        f"[SEP] "
+        f"{topic_summary} "
+        f"[SEP] "
+        f"{current_message}"
+    )
+
+    encoded = tokenizer(
+        text,
+        truncation=True,
+        max_length=256,
+        padding=False
+    )
+
+    return {
+        "input_ids": encoded["input_ids"],
+        "attention_mask": encoded["attention_mask"],
+        "label": label2id[record["label"]]
+    }
+
+
+prepared = prepare_record(records[0])
+
+print(tokenizer.decode(prepared["input_ids"]))
+print("\nNumber of tokens:", len(prepared["input_ids"]))
+print("Label:", prepared["label"])
+
+print(tokenizer.decode(prepared["input_ids"]))
+print("\nToken type IDs:", prepared.get("token_type_ids"))
+
+
+from tqdm.auto import tqdm
+
+def prepare_dataframe(dataframe):
+    prepared_records = []
+
+    for _, row in tqdm(dataframe.iterrows(), total=len(dataframe)):
+        prepared_records.append(
+            prepare_record(row.to_dict())
+        )
+
+    return prepared_records
+
+
+train_encoded = prepare_dataframe(train_df)
+val_encoded = prepare_dataframe(val_df)
+test_encoded = prepare_dataframe(test_df)
+
+print("\nEncoded sizes:")
+print("Train:", len(train_encoded))
+print("Validation:", len(val_encoded))
+print("Test:", len(test_encoded))
+
+sample = train_encoded[0]
+
+print("Label:", sample["label"])
+print("Token count:", len(sample["input_ids"]))
+
+print("\nDecoded input:")
+print(tokenizer.decode(sample["input_ids"]))
+
+print("\nAttention mask length:", len(sample["attention_mask"]))
+
+### Data Preparation for HuggingFace Dataset
+We transform the raw text into encoded token IDs and generate attention masks, creating clean HuggingFace `Dataset` instances ready for model consumption.
+
+from datasets import Dataset
+
+train_dataset = Dataset.from_list(train_encoded)
+val_dataset = Dataset.from_list(val_encoded)
+test_dataset = Dataset.from_list(test_encoded)
+
+print(train_dataset)
+print(val_dataset)
+print(test_dataset)
+
+print(train_dataset[0])
+
+from transformers import AutoModelForSequenceClassification
+
+model = AutoModelForSequenceClassification.from_pretrained(
+    "microsoft/deberta-v3-base",
+    num_labels=3,
+    id2label=id2label,
+    label2id=label2id
+)
+
+print("Model loaded successfully")
+print("Number of labels:", model.config.num_labels)
+print("Labels:", model.config.id2label)
+
+trainable_params = 0
+total_params = 0
+
+for param in model.parameters():
+    total_params += param.numel()
+    if param.requires_grad:
+        trainable_params += param.numel()
+
+print(f"Total parameters:     {total_params:,}")
+print(f"Trainable parameters: {trainable_params:,}")
+print(f"Frozen parameters:    {total_params - trainable_params:,}")
+
+print("\nClassifier:")
+print(model.classifier)
+
+import torch
+
+print("PyTorch version:", torch.__version__)
+print("CUDA available:", torch.cuda.is_available())
+
+if torch.cuda.is_available():
+    print("GPU:", torch.cuda.get_device_name(0))
+    print("GPU memory:",
+          round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 2),
+          "GB")
+
+## # Training Configuration & Sanity Run
+Before launching a full-scale training run, we build our custom metric computations, load DeBERTa-v3-base weights, and run a fast sanity check on a small subset of the data.
+
+from transformers import DataCollatorWithPadding
+
+data_collator = DataCollatorWithPadding(
+    tokenizer=tokenizer,
+    padding=True,
+)
+
+print("Data collator created successfully.")
+
+import numpy as np
+from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
+
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=-1)
+
+    accuracy = accuracy_score(labels, predictions)
+
+    macro_f1 = f1_score(
+        labels,
+        predictions,
+        average="macro"
+    )
+
+    weighted_f1 = f1_score(
+        labels,
+        predictions,
+        average="weighted"
+    )
+
+    return {
+        "accuracy": accuracy,
+        "macro_f1": macro_f1,
+        "weighted_f1": weighted_f1
+    }
+
+print("Metrics function ready.")
+
+#Sanity Check
+
+# Create tiny datasets for pipeline testing
+sanity_train = train_dataset.select(range(64))
+sanity_val = val_dataset.select(range(32))
+
+sanity_args = TrainingArguments(
+    output_dir="./contextflow_sanity_check",
+    num_train_epochs=1,
+
+    per_device_train_batch_size=8,
+    per_device_eval_batch_size=8,
+
+    learning_rate=2e-5,
+    weight_decay=0.01,
+
+    eval_strategy="steps",
+    eval_steps=4,
+
+    logging_strategy="steps",
+    logging_steps=1,
+
+    save_strategy="no",
+
+    fp16=False,
+
+    report_to="none",
+
+    seed=42
+)
+
+sanity_trainer = Trainer(
+    model=model,
+    args=sanity_args,
+    train_dataset=sanity_train,
+    eval_dataset=sanity_val,
+    data_collator=data_collator,
+    compute_metrics=compute_metrics,
+)
+
+print("Sanity-check Trainer created.")
+
+sanity_trainer.train()
+
+Reloading the model for fresh weights
+
+from transformers import AutoModelForSequenceClassification
+
+model = AutoModelForSequenceClassification.from_pretrained(
+    "microsoft/deberta-v3-base",
+    num_labels=3,
+    id2label=id2label,
+    label2id=label2id,
+    dtype=torch.float32
+)
+
+# Check parameter dtype
+dtypes = set(param.dtype for param in model.parameters())
+
+print("Model reloaded.")
+print("Parameter dtypes:", dtypes)
+print("Trainable parameters:",
+      sum(p.numel() for p in model.parameters() if p.requires_grad))
+
+from transformers import TrainingArguments
+
+training_args = TrainingArguments(
+    output_dir="./contextflow_deberta",
+
+    # Training
+    num_train_epochs=3,
+    per_device_train_batch_size=8,
+    per_device_eval_batch_size=8,
+    gradient_accumulation_steps=2,
+
+    # Optimization
+    learning_rate=2e-5,
+    weight_decay=0.01,
+    warmup_steps=100,
+
+    # Evaluation
+    eval_strategy="epoch",
+    save_strategy="epoch",
+    load_best_model_at_end=True,
+    metric_for_best_model="macro_f1",
+    greater_is_better=True,
+
+    # Performance
+    fp16=True,
+
+    # Logging
+    logging_strategy="steps",
+    logging_steps=100,
+
+    # Reproducibility
+    seed=42,
+
+    # Keep only useful checkpoints
+    save_total_limit=2,
+
+    # Disable external reporting
+    report_to="none"
+)
+
+print("Training arguments configured.")
+
+from transformers import Trainer
+
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+    eval_dataset=val_dataset,
+    data_collator=data_collator,
+    compute_metrics=compute_metrics,
+)
+
+print("Trainer created successfully.")
+
+train_result = trainer.train()
+
+test_results = trainer.evaluate(
+    eval_dataset=test_dataset
+)
+
+print(test_results)
+
+test_results = trainer.evaluate(
+    eval_dataset=test_dataset
+)
+
+print(test_results)
+
+from sklearn.metrics import classification_report, confusion_matrix
+import numpy as np
+
+predictions = trainer.predict(test_dataset)
+
+pred_labels = np.argmax(predictions.predictions, axis=-1)
+true_labels = np.array(test_dataset["label"])
+
+print(classification_report(
+    true_labels,
+    pred_labels,
+    target_names=[
+        "CONTINUATION",
+        "SHIFT",
+        "RETURN"
+    ],
+    digits=4
+))
+
+print("\nConfusion Matrix:")
+print(confusion_matrix(true_labels, pred_labels))
+
+## # Out-Of-Distribution Prediction & Evaluation
+Here, we define a robust prediction pipeline and test the trained model on complex conversational shifts and returns to ensure high precision and recall.
+
+import torch
+
+def predict_contextflow(history, active_topic_summary, current_message):
+    context = format_recent_history(
+        history,
+        n_messages=4
+    )
+
+    text = (
+        f"{context} "
+        f"[SEP] "
+        f"{active_topic_summary} "
+        f"[SEP] "
+        f"{current_message}"
+    )
+
+    encoded = tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+        max_length=256
+    )
+
+    device = next(trainer.model.parameters()).device
+    encoded = {k: v.to(device) for k, v in encoded.items()}
+
+    trainer.model.eval()
+
+    with torch.no_grad():
+        outputs = trainer.model(**encoded)
+
+    probabilities = torch.softmax(outputs.logits, dim=-1)
+    predicted_id = torch.argmax(probabilities, dim=-1).item()
+
+    return {
+        "prediction": id2label[predicted_id],
+        "confidence": probabilities[0, predicted_id].item(),
+        "probabilities": {
+            id2label[i]: probabilities[0, i].item()
+            for i in range(3)
+        }
+    }
+
+history = [
+    {
+        "role": "user",
+        "content": "I'm preparing for a machine learning interview. What should I focus on?"
+    },
+    {
+        "role": "assistant",
+        "content": "Focus on supervised learning, model evaluation, feature engineering, and basic probability."
+    }
+]
+
+active_topic = "Preparing for a machine learning interview"
+
+current_message = "Which classification metrics should I be ready to explain?"
+
+result = predict_contextflow(
+    history,
+    active_topic,
+    current_message
+)
+
+print(result)
+
+history = [
+    {
+        "role": "user",
+        "content": "I'm preparing for a machine learning interview. What should I focus on?"
+    },
+    {
+        "role": "assistant",
+        "content": "Focus on supervised learning, model evaluation, feature engineering, and basic probability."
+    },
+    {
+        "role": "user",
+        "content": "What should I know about REST APIs for the interview?"
+    },
+    {
+        "role": "assistant",
+        "content": "Know HTTP methods, status codes, authentication, JSON, and how a client communicates with a backend service."
+    },
+    {
+        "role": "user",
+        "content": "And what about deploying a small Flask application?"
+    },
+    {
+        "role": "assistant",
+        "content": "You should understand WSGI servers, environment variables, Docker basics, and deployment platforms."
+    }
+]
+
+active_topic = "Deploying a Flask application"
+
+current_message = "For the model evaluation part, should I focus more on precision and recall or accuracy?"
+
+result = predict_contextflow(
+    history,
+    active_topic,
+    current_message
+)
+
+print(result)
+
+history = [
+    {
+        "role": "user",
+        "content": "I'm preparing for a machine learning interview. What should I focus on?"
+    },
+    {
+        "role": "assistant",
+        "content": "Focus on supervised learning, model evaluation, feature engineering, and basic probability."
+    },
+    {
+        "role": "user",
+        "content": "What should I know about REST APIs for the interview?"
+    },
+    {
+        "role": "assistant",
+        "content": "Know HTTP methods, status codes, authentication, JSON, and client-server communication."
+    },
+    {
+        "role": "user",
+        "content": "How should I deploy a Flask application?"
+    },
+    {
+        "role": "assistant",
+        "content": "Understand WSGI servers, environment variables, Docker basics, and deployment platforms."
+    },
+    {
+        "role": "user",
+        "content": "Would precision and recall be more useful than accuracy when evaluating the classifier?"
+    }
+]
+
+active_topic = "Deploying a Flask application"
+
+current_message = "And should I be worried about class imbalance when interpreting those metrics?"
+
+result = predict_contextflow(
+    history,
+    active_topic,
+    current_message
+)
+
+print(result)
+
+history = [
+    {
+        "role": "user",
+        "content": "I'm preparing for a machine learning interview. What should I focus on?"
+    },
+    {
+        "role": "assistant",
+        "content": "Focus on supervised learning, model evaluation, feature engineering, and probability."
+    },
+    {
+        "role": "user",
+        "content": "How should I evaluate a binary classifier?"
+    },
+    {
+        "role": "assistant",
+        "content": "Accuracy, precision, recall, F1 score, and ROC-AUC are common choices."
+    }
+]
+
+active_topic = "Evaluating a machine learning classifier"
+
+current_message = "I'm also thinking about buying a new laptop. What specifications should I prioritize?"
+
+result = predict_contextflow(
+    history,
+    active_topic,
+    current_message
+)
+
+print(result)
+
+history = [
+    {
+        "role": "user",
+        "content": "I'm comparing PostgreSQL and MySQL for a backend project. Which is better for complex queries?"
+    },
+    {
+        "role": "assistant",
+        "content": "Both are capable, but PostgreSQL generally offers stronger support for advanced queries, extensions, and complex data types."
+    },
+    {
+        "role": "user",
+        "content": "What should I know about deploying a FastAPI application?"
+    },
+    {
+        "role": "assistant",
+        "content": "You should understand ASGI servers such as Uvicorn, environment variables, Docker, and production process management."
+    },
+    {
+        "role": "user",
+        "content": "Would Docker make deployment easier?"
+    },
+    {
+        "role": "assistant",
+        "content": "Yes. Docker gives you a reproducible environment and makes deployment more consistent across machines."
+    }
+]
+
+active_topic = "Deploying a FastAPI application"
+
+current_message = "For those complex queries, would PostgreSQL still be the better choice?"
+
+result = predict_contextflow(
+    history,
+    active_topic,
+    current_message
+)
+
+print(result)
+
+# Saving the model
+
+save_path = "/content/deberta_v3_contextflow"
+
+trainer.model.save_pretrained(save_path)
+tokenizer.save_pretrained(save_path)
+
+print("Model and tokenizer saved successfully!")
+print(f"Saved to: {save_path}")
+
+import shutil
+
+save_path = "/content/drive/MyDrive/ContextFlow/deberta_v3_contextflow"
+zip_path = "/content/deberta_v3_contextflow"
+
+shutil.make_archive(
+    zip_path,
+    "zip",
+    root_dir="/content/drive/MyDrive/ContextFlow",
+    base_dir="deberta_v3_contextflow"
+)
+
+print("ZIP created successfully!")
+print(zip_path + ".zip")
+
+#Loading the model
+
+import zipfile
+import os
+
+zip_path = "/content/deberta_v3_contextflow.zip"
+extract_path = "/content/contextflow_model"
+
+with zipfile.ZipFile(zip_path, "r") as zip_ref:
+    zip_ref.extractall(extract_path)
+
+print("Model extracted!")
+print(os.listdir(extract_path))
+
+import os
+
+for root, dirs, files in os.walk(extract_path):
+    if "config.json" in files and (
+        "model.safetensors" in files or "pytorch_model.bin" in files
+    ):
+        model_path = root
+        break
+
+print("Model path:", model_path)
+
+import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+model = AutoModelForSequenceClassification.from_pretrained(
+    model_path,
+    torch_dtype=torch.float32
+)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = model.to(device)
+model.eval()
+
+print("Model loaded successfully!")
+print("Device:", device)
+print("Model dtype:", next(model.parameters()).dtype)
+print("Labels:", model.config.id2label)
+
+## # Semantic Representation & Multi-Topic Memory
+In this section, we load a Sentence-Transformer embedding model to generate semantic embeddings for each candidate conversation topic. We will use this to track active and historical topics.
+
+!pip install -q sentence-transformers
+
+from sentence_transformers import SentenceTransformer
+import torch
+
+embedding_model = SentenceTransformer(
+    "all-MiniLM-L6-v2",
+    device="cuda" if torch.cuda.is_available() else "cpu"
+)
+
+print("Embedding model loaded")
+print("Device:", embedding_model.device)
+
+### Topic Memory Registration
+We define helper functions to compute normal embedding vectors and register candidate topics in an active session dictionary.
+
+topic_memory = {}
+def add_topic(topic_id, summary):
+    embedding = embedding_model.encode(
+        summary,
+        convert_to_tensor=True,
+        normalize_embeddings=True
+    )
+
+    topic_memory[topic_id] = {
+        "summary": summary,
+        "embedding": embedding
+    }
+
+    print(f"Added {topic_id}: {summary}")
+
+add_topic(
+    "T1",
+    "Preparing for a machine learning interview"
+)
+
+add_topic(
+    "T2",
+    "Developing and deploying REST APIs"
+)
+
+add_topic(
+    "T3",
+    "Deploying Flask applications"
+)
+
+print(topic_memory.keys())
+
+for topic_id, topic in topic_memory.items():
+    print(
+        topic_id,
+        "→",
+        topic["summary"],
+        "| embedding shape:",
+        topic["embedding"].shape
+    )
+
+### Semantic Similarity & Cosine Matchers
+We implement cosine similarity search over our topic memory to evaluate how closely a new user message relates to currently stored topics.
+
+import torch
+import torch.nn.functional as F
+
+def get_topic_similarities(current_message):
+    current_embedding = embedding_model.encode(
+        current_message,
+        convert_to_tensor=True,
+        normalize_embeddings=True
+    )
+
+    similarities = {}
+
+    for topic_id, topic in topic_memory.items():
+        similarity = F.cosine_similarity(
+            current_embedding.unsqueeze(0),
+            topic["embedding"].unsqueeze(0)
+        ).item()
+
+        similarities[topic_id] = similarity
+
+    return similarities
+
+current_message = "What should I study for my ML interview?"
+
+similarities = get_topic_similarities(current_message)
+
+print(similarities)
+
+current_message = "How do I deploy a Flask API?"
+
+similarities = get_topic_similarities(current_message)
+
+print(similarities)
+
+def find_best_topic(current_message):
+    similarities = get_topic_similarities(current_message)
+
+    best_topic = max(similarities, key=similarities.get)
+    best_score = similarities[best_topic]
+
+    return {
+        "topic_id": best_topic,
+        "similarity": best_score,
+        "all_similarities": similarities
+    }
+
+result = find_best_topic(
+    "How do I deploy a Flask API?"
+)
+
+print(result)
+
+### Tracking Topic Context Transitions
+Here, we define logic to isolate the current active topic's context from previous topics in memory. This supports finding when conversations return to a previous discussion point.
+
+active_topic_id = "T3"
+
+def get_topic_context():
+    active_topic = topic_memory[active_topic_id]
+
+    previous_topics = {
+        topic_id: topic
+        for topic_id, topic in topic_memory.items()
+        if topic_id != active_topic_id
+    }
+
+    return active_topic, previous_topics
+
+active_topic, previous_topics = get_topic_context()
+
+print("Active:")
+print(active_topic["summary"])
+
+print("\nPrevious topics:")
+for topic_id, topic in previous_topics.items():
+    print(topic_id, "→", topic["summary"])
+
+def get_return_evidence(current_message):
+    similarities = get_topic_similarities(current_message)
+
+    active_similarity = similarities[active_topic_id]
+
+    previous_similarities = {
+        topic_id: score
+        for topic_id, score in similarities.items()
+        if topic_id != active_topic_id
+    }
+
+    best_previous_topic = max(
+        previous_similarities,
+        key=previous_similarities.get
+    )
+
+    best_previous_similarity = previous_similarities[best_previous_topic]
+
+    similarity_margin = (
+        best_previous_similarity - active_similarity
+    )
+
+    return {
+        "active_topic": active_topic_id,
+        "active_similarity": active_similarity,
+        "best_previous_topic": best_previous_topic,
+        "best_previous_similarity": best_previous_similarity,
+        "similarity_margin": similarity_margin,
+        "all_similarities": similarities
+    }
+
+result = get_return_evidence(
+    "What should I study for my ML interview?"
+)
+
+print(result)
+
+result = get_return_evidence(
+    "How do I deploy a Flask API?"
+)
+
+print(result)
+
+def predict_contextflow(
+    history,
+    active_topic_summary,
+    current_message
+):
+    context = format_recent_history(
+        history,
+        n_messages=4
+    )
+
+    text = (
+        f"{context} "
+        f"[SEP] "
+        f"{active_topic_summary} "
+        f"[SEP] "
+        f"{current_message}"
+    )
+
+    inputs = tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+        max_length=256
+    )
+
+    inputs = {
+        key: value.to(device)
+        for key, value in inputs.items()
+    }
+
+    model.eval()
+
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    probabilities = torch.softmax(
+        outputs.logits,
+        dim=-1
+    )[0]
+
+    predicted_id = torch.argmax(probabilities).item()
+
+    return {
+        "prediction": id2label[predicted_id],
+        "confidence": probabilities[predicted_id].item(),
+        "probabilities": {
+            id2label[i]: probabilities[i].item()
+            for i in range(3)
+        }
+    }
+
+def get_hybrid_evidence(
+    history,
+    active_topic_summary,
+    current_message
+):
+    # Transformer prediction
+    transformer_result = predict_contextflow(
+        history,
+        active_topic_summary,
+        current_message
+    )
+
+    # Semantic RETURN evidence
+    semantic_result = get_return_evidence(
+        current_message
+    )
+
+    return {
+        "transformer": transformer_result,
+        "semantic": semantic_result
+    }
+
+history = [
+    {
+        "role": "user",
+        "content": "I'm preparing for a machine learning interview. What should I focus on?"
+    },
+    {
+        "role": "assistant",
+        "content": "Focus on supervised learning, model evaluation, feature engineering, and basic probability."
+    },
+    {
+        "role": "user",
+        "content": "What should I know about REST APIs?"
+    },
+    {
+        "role": "assistant",
+        "content": "Know HTTP methods, status codes, authentication, JSON, and client-server communication."
+    },
+    {
+        "role": "user",
+        "content": "How should I deploy a Flask application?"
+    },
+    {
+        "role": "assistant",
+        "content": "Understand WSGI servers, environment variables, Docker basics, and deployment platforms."
+    }
+]
+
+active_topic_summary = "Deploying Flask applications"
+
+current_message = "What should I study for my ML interview?"
+
+
+result = get_hybrid_evidence(
+    history,
+    "Deploying Flask applications",
+    "What should I study for my ML interview?"
+)
+
+print(result)
+
+result = get_hybrid_evidence(
+    history,
+    "Deploying Flask applications",
+    "How do I deploy a Flask API?"
+)
+
+print(result)
+
+## # Evaluation of Semantic Topic Retrieval
+To validate the system's performance, we extract actual ground-truth `RETURN` records from our test split and evaluate whether our embedding similarity search correctly retrieves the target topic.
+
+# Evaluate semantic topic retrieval on actual RETURN examples
+
+return_test_df = test_df[
+    test_df["label"] == "RETURN"
+].copy()
+
+print("RETURN examples in test set:", len(return_test_df))
+
+def get_topic_embeddings_from_record(record):
+    topics = {}
+
+    for topic in record["candidate_topics"]:
+        topic_id = topic["topic_id"]
+        summary = topic["topic_summary"]
+
+        embedding = embedding_model.encode(
+            summary,
+            convert_to_tensor=True,
+            normalize_embeddings=True
+        )
+
+        topics[topic_id] = {
+            "summary": summary,
+            "embedding": embedding
+        }
+
+    return topics
+
+retrieval_results = []
+
+for _, row in return_test_df.iterrows():
+
+    record = row.to_dict()
+
+    current_message = record["current_message"]
+    active_topic_id = record["active_topic_id"]
+    target_topic_id = record["target_topic_id"]
+
+    topics = get_topic_embeddings_from_record(record)
+
+    current_embedding = embedding_model.encode(
+        current_message,
+        convert_to_tensor=True,
+        normalize_embeddings=True
+    )
+
+    similarities = {}
+
+    for topic_id, topic in topics.items():
+
+        similarity = F.cosine_similarity(
+            current_embedding.unsqueeze(0),
+            topic["embedding"].unsqueeze(0)
+        ).item()
+
+        similarities[topic_id] = similarity
+
+    # Do not allow the currently active topic to be selected
+    previous_similarities = {
+        topic_id: score
+        for topic_id, score in similarities.items()
+        if topic_id != active_topic_id
+    }
+
+    predicted_topic = max(
+        previous_similarities,
+        key=previous_similarities.get
+    )
+
+    retrieval_results.append({
+        "conversation_id": record["conversation_id"],
+        "turn_id": record["turn_id"],
+        "target_topic": target_topic_id,
+        "predicted_topic": predicted_topic,
+        "correct": predicted_topic == target_topic_id,
+        "similarities": similarities
+    })
+
+print("Evaluation complete.")
+
+retrieval_df = pd.DataFrame(retrieval_results)
+
+retrieval_accuracy = retrieval_df["correct"].mean()
+
+print("RETURN Topic Retrieval Accuracy:",
+      round(retrieval_accuracy, 4))
+
+print("\nCorrect:",
+      retrieval_df["correct"].sum())
+
+print("Total:",
+      len(retrieval_df))
+
+### Deep Error Analysis
+By filtering for incorrect retrievals, we can inspect where the embedding model failed to understand nuance, showing us the limitations of basic sentence-level similarities.
+
+# Evaluate MiniLM retrieval specifically when DeBERTa predicts RETURN
+
+return_hybrid_results = []
+
+for _, row in return_test_df.iterrows():
+
+    record = row.to_dict()
+
+    # DeBERTa prediction
+    transformer_result = predict_contextflow(
+        record["history"],
+        get_active_topic_summary(record),
+        record["current_message"]
+    )
+
+    # Only inspect cases where DeBERTa predicts RETURN
+    if transformer_result["prediction"] != "RETURN":
+        continue
+
+    active_topic_id = record["active_topic_id"]
+    target_topic_id = record["target_topic_id"]
+
+    topics = get_topic_embeddings_from_record(record)
+
+    current_embedding = embedding_model.encode(
+        record["current_message"],
+        convert_to_tensor=True,
+        normalize_embeddings=True
+    )
+
+    similarities = {}
+
+    for topic_id, topic in topics.items():
+
+        similarity = F.cosine_similarity(
+            current_embedding.unsqueeze(0),
+            topic["embedding"].unsqueeze(0)
+        ).item()
+
+        similarities[topic_id] = similarity
+
+    previous_similarities = {
+        topic_id: score
+        for topic_id, score in similarities.items()
+        if topic_id != active_topic_id
+    }
+
+    predicted_topic = max(
+        previous_similarities,
+        key=previous_similarities.get
+    )
+
+    return_hybrid_results.append({
+        "conversation_id": record["conversation_id"],
+        "turn_id": record["turn_id"],
+        "target_topic": target_topic_id,
+        "predicted_topic": predicted_topic,
+        "correct": predicted_topic == target_topic_id
+    })
+
+print("Cases where DeBERTa predicted RETURN:",
+      len(return_hybrid_results))
+
+hybrid_retrieval_df = pd.DataFrame(return_hybrid_results)
+
+if len(hybrid_retrieval_df) > 0:
+
+    hybrid_accuracy = hybrid_retrieval_df["correct"].mean()
+
+    print(
+        "MiniLM retrieval accuracy when DeBERTa predicts RETURN:",
+        round(hybrid_accuracy, 4)
+    )
+
+    print(
+        "Correct:",
+        hybrid_retrieval_df["correct"].sum()
+    )
+
+    print(
+        "Total:",
+        len(hybrid_retrieval_df)
+    )
+else:
+    print("DeBERTa did not predict RETURN on any actual RETURN examples.")
+
+incorrect_returns = retrieval_df[
+    retrieval_df["correct"] == False
+].copy()
+
+print("Incorrect RETURN retrievals:", len(incorrect_returns))
+
+display(
+    incorrect_returns.head(10)
+)
+
+## # Context-Aware Semantic Search
+We enhance our retrieval accuracy by building a richer context for each candidate topic. Instead of matching just the brief summary, we append prior dialog history to the topic representations.
+
+def build_topic_contexts(record):
+    """
+    Build a richer text representation for each topic
+    using the conversation history associated with that topic.
+    """
+
+    topic_contexts = {}
+
+    for topic in record["candidate_topics"]:
+        topic_id = topic["topic_id"]
+        topic_summary = topic["topic_summary"]
+
+        # Start with the topic summary
+        context_parts = [topic_summary]
+
+        # Add conversation history
+        for message in record["history"]:
+            context_parts.append(
+                f"{message['role'].capitalize()}: {message['content']}"
+            )
+
+        topic_contexts[topic_id] = " ".join(context_parts)
+
+    return topic_contexts
+
+def get_context_aware_similarities(record):
+
+    current_message = record["current_message"]
+
+    topic_contexts = build_topic_contexts(record)
+
+    current_embedding = embedding_model.encode(
+        current_message,
+        convert_to_tensor=True,
+        normalize_embeddings=True
+    )
+
+    similarities = {}
+
+    for topic_id, topic_text in topic_contexts.items():
+
+        topic_embedding = embedding_model.encode(
+            topic_text,
+            convert_to_tensor=True,
+            normalize_embeddings=True
+        )
+
+        similarity = F.cosine_similarity(
+            current_embedding.unsqueeze(0),
+            topic_embedding.unsqueeze(0)
+        ).item()
+
+        similarities[topic_id] = similarity
+
+    return similarities
+
+test_record = return_record
+
+similarities = get_context_aware_similarities(test_record)
+
+print("Current message:")
+print(test_record["current_message"])
+
+print("\nTarget topic:", test_record["target_topic_id"])
+
+print("\nContext-aware similarities:")
+print(similarities)
+
+predicted_topic = max(
+    similarities,
+    key=similarities.get
+)
+
+print("\nPredicted topic:", predicted_topic)
+
+context_aware_results = []
+
+for _, row in test_df.iterrows():
+
+    record = row.to_dict()
+
+    # Only evaluate actual RETURN examples
+    if record["label"] != "RETURN":
+        continue
+
+    similarities = get_context_aware_similarities(record)
+
+    # Do not allow the currently active topic to win
+    active_topic_id = record["active_topic_id"]
+
+    previous_similarities = {
+        topic_id: score
+        for topic_id, score in similarities.items()
+        if topic_id != active_topic_id
+    }
+
+    predicted_topic = max(
+        previous_similarities,
+        key=previous_similarities.get
+    )
+
+    target_topic = record["target_topic_id"]
+
+    context_aware_results.append({
+        "conversation_id": record["conversation_id"],
+        "turn_id": record["turn_id"],
+        "target_topic": target_topic,
+        "predicted_topic": predicted_topic,
+        "correct": predicted_topic == target_topic,
+        "similarities": similarities
+    })
+
+print(
+    "RETURN examples evaluated:",
+    len(context_aware_results)
+)
+
+context_aware_df = pd.DataFrame(context_aware_results)
+
+accuracy = context_aware_df["correct"].mean()
+
+print(
+    "Context-aware MiniLM retrieval accuracy:",
+    round(accuracy, 4)
+)
+
+print(
+    "Correct:",
+    context_aware_df["correct"].sum()
+)
+
+print(
+    "Total:",
+    len(context_aware_df)
+)
+
+# Experiment Failed
+
+---
+
+more context did not make the results better but actually made them slighlty worse
+
+## # Verification & Pipeline Hybrid Demos
+We run end-to-end sanity tests on our hybrid prediction system, combining DeBERTa's sequence classification output with Sentence-Transformer's local semantic memory.
+
+history = [
+    {
+        "role": "user",
+        "content": "I'm preparing for a machine learning interview. What should I focus on?"
+    },
+    {
+        "role": "assistant",
+        "content": "Focus on supervised learning, model evaluation, feature engineering, and probability."
+    },
+    {
+        "role": "user",
+        "content": "What should I know about REST APIs?"
+    },
+    {
+        "role": "assistant",
+        "content": "Know HTTP methods, status codes, authentication, JSON, and client-server communication."
+    },
+    {
+        "role": "user",
+        "content": "How should I deploy a Flask application?"
+    },
+    {
+        "role": "assistant",
+        "content": "Understand WSGI servers, environment variables, Docker basics, and deployment platforms."
+    }
+]
+
+active_topic_id = "T3"
+
+current_message = (
+    "Going back to the interview preparation, "
+    "which machine learning metrics should I be ready to explain?"
+)
+
+transformer_result = predict_contextflow(
+    history,
+    "Deploying Flask applications",
+    current_message
+)
+
+semantic_result = get_return_evidence(current_message)
+
+print("TRANSFORMER")
+print(transformer_result)
+
+print("\nSEMANTIC")
+print(semantic_result)
+

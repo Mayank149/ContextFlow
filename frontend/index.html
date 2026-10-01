@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ContextFlow — Conversation Transition & Semantic Context Intelligence</title>
+  <meta name="description" content="State-of-the-art conversational transition detection powered by fine-tuned DeBERTa-v3 and MiniLM semantic topic retrieval with hybrid decision logic.">
+  
+  <!-- Modern Editorial & Monospace Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+  
+  <!-- Three.js for 3D Topic Visualization -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="theme-warm-editorial">
+  <div class="grain-overlay"></div>
+
+  <!-- Header & Status Bar -->
+  <header class="app-header">
+    <div class="brand-section">
+      <div class="brand-glyph">
+        <span class="glyph-core"></span>
+        <span class="glyph-ring"></span>
+      </div>
+      <div class="brand-text">
+        <h1 class="brand-title">CONTEXTFLOW</h1>
+        <p class="brand-subtitle">Transition Detection &bull; Hybrid Semantic Context Intelligence</p>
+      </div>
+    </div>
+
+    <!-- Scenarios and Backend Connection Indicator -->
+    <div class="header-controls">
+      <div class="scenario-selector-wrapper">
+        <label for="scenarioSelect" class="control-label">Demo Scenario:</label>
+        <select id="scenarioSelect" class="editorial-select">
+          <option value="return_ml">Benchmark 1: Flask &rarr; RETURN to ML Interview</option>
+          <option value="shift_cloud">Benchmark 2: ML &rarr; SHIFT to REST APIs</option>
+          <option value="continuation_normal">Benchmark 3: Active CONTINUATION on Flask</option>
+          <option value="hybrid_override">Benchmark 4: Suspicious CONTINUATION &rarr; Hybrid Reconsideration</option>
+          <option value="custom">Custom Dialogue Session</option>
+        </select>
+      </div>
+
+      <div class="status-indicator-box">
+        <span class="status-dot online" id="serverStatusDot"></span>
+        <span class="status-text" id="serverStatusText">Backend: Connecting...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Application Workspace (3-Column Layout) -->
+  <main class="app-workspace">
+
+    <!-- LEFT PANEL: Conversation Dialogue & Turns -->
+    <section class="panel panel-dialogue" id="conversationPanel">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <span class="panel-tag">STREAM</span>
+          <h2 class="panel-title">Conversation History</h2>
+        </div>
+        <div class="panel-actions">
+          <button id="clearChatBtn" class="btn-ghost" title="Reset current conversation">Reset</button>
+        </div>
+      </div>
+
+      <div class="dialogue-scroll-area" id="dialogueContainer">
+        <!-- Dialogue messages injected by JS -->
+      </div>
+
+      <!-- Current Message Input Area -->
+      <div class="input-composer">
+        <div class="composer-header">
+          <span class="composer-badge">INCOMING TURN</span>
+          <span class="token-estimate" id="tokenEstimate">~32 tokens</span>
+        </div>
+        <textarea 
+          id="currentMessageInput" 
+          class="message-textarea" 
+          rows="3" 
+          placeholder="Enter current user message to evaluate context transition..."
+        >What metrics should I study for the classifier?</textarea>
+        
+        <div class="composer-footer">
+          <div class="threshold-chip">
+            <span class="chip-label">&tau; Threshold:</span>
+            <span class="chip-val" id="chipThresholdVal">0.20</span>
+          </div>
+          <button id="analyzeBtn" class="btn-primary">
+            <span class="btn-text">Analyze Context</span>
+            <span class="btn-spinner" id="analyzeSpinner"></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- CENTER PANEL: 3D Topic Space & Memory Graph -->
+    <section class="panel panel-center" id="centerVisualizationPanel">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <span class="panel-tag">3D TOPIC MEMORY</span>
+          <h2 class="panel-title">Dynamic Context Topology</h2>
+        </div>
+        <div class="view-controls">
+          <button id="resetCamBtn" class="btn-icon" title="Reset 3D Camera">&circlearrowright;</button>
+          <button id="toggleWireframeBtn" class="btn-icon" title="Toggle Grid">&boxplus;</button>
+        </div>
+      </div>
+
+      <!-- Interactive 3D Canvas Container -->
+      <div class="canvas-viewport" id="canvasViewport">
+        <div class="canvas-legend">
+          <span class="legend-item active"><span class="legend-color active"></span> Active Topic</span>
+          <span class="legend-item target"><span class="legend-color target"></span> Returned Target</span>
+          <span class="legend-item previous"><span class="legend-color previous"></span> Stored Topic</span>
+        </div>
+        <div id="threeCanvasMount"></div>
+        <div class="viewport-overlay-hint">Drag to orbit &bull; Scroll to zoom</div>
+      </div>
+
+      <!-- Memory Context Inspector (Active & Previous Topics) -->
+      <div class="topic-memory-hud">
+        <div class="active-topic-card">
+          <div class="topic-card-header">
+            <span class="topic-status-pulse"></span>
+            <span class="topic-label">CURRENT ACTIVE TOPIC</span>
+            <span class="topic-id-badge" id="activeTopicBadge">T3</span>
+          </div>
+          <p class="topic-summary-text" id="activeTopicSummary">Deploying Flask applications</p>
+        </div>
+
+        <div class="candidate-topics-strip">
+          <div class="strip-header">
+            <span class="strip-title">Candidate Topics in Memory</span>
+            <button id="addTopicModalBtn" class="btn-small-link">+ Add Topic</button>
+          </div>
+          <div class="topics-list-container" id="candidateTopicsList">
+            <!-- Candidate cards injected by JS -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: Decision Engine & Explainability -->
+    <section class="panel panel-decision" id="decisionPanel">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <span class="panel-tag">INFERENCE ENGINE</span>
+          <h2 class="panel-title">Decision &amp; Evidence</h2>
+        </div>
+        <div class="latency-badge" id="inferenceLatency">ready</div>
+      </div>
+
+      <div class="decision-scroll-area">
+        
+        <!-- Primary Decision Hero Banner -->
+        <div class="transition-hero" id="transitionHero">
+          <span class="hero-label">PREDICTED TRANSITION</span>
+          <div class="hero-prediction-badge" id="predictionBadge">
+            <span class="prediction-icon" id="predictionIcon">&bull;</span>
+            <span class="prediction-title" id="predictionTitle">STANDBY</span>
+          </div>
+          <div class="hero-confidence-bar-wrap">
+            <div class="confidence-labels">
+              <span>Model Confidence</span>
+              <span id="confidencePct">0.00%</span>
+            </div>
+            <div class="confidence-track">
+              <div class="confidence-fill" id="confidenceFill" style="width: 0%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DeBERTa-v3 Transformer Probabilities -->
+        <div class="metric-card">
+          <div class="card-title-row">
+            <h3 class="card-title">DeBERTa-v3 Transformer Distribution</h3>
+            <span class="model-tag">Primary Classifier</span>
+          </div>
+
+          <div class="probability-bars">
+            <div class="prob-row" id="rowContinuation">
+              <div class="prob-meta">
+                <span class="prob-name">CONTINUATION</span>
+                <span class="prob-value" id="valContinuation">0.0%</span>
+              </div>
+              <div class="prob-track">
+                <div class="prob-fill continuation" id="fillContinuation" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <div class="prob-row" id="rowShift">
+              <div class="prob-meta">
+                <span class="prob-name">SHIFT</span>
+                <span class="prob-value" id="valShift">0.0%</span>
+              </div>
+              <div class="prob-track">
+                <div class="prob-fill shift" id="fillShift" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <div class="prob-row" id="rowReturn">
+              <div class="prob-meta">
+                <span class="prob-name">RETURN</span>
+                <span class="prob-value" id="valReturn">0.0%</span>
+              </div>
+              <div class="prob-track">
+                <div class="prob-fill return" id="fillReturn" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MiniLM Semantic Verification & Retrieval -->
+        <div class="metric-card">
+          <div class="card-title-row">
+            <h3 class="card-title">MiniLM Semantic Supporting Layer</h3>
+            <span class="model-tag">all-MiniLM-L6-v2</span>
+          </div>
+
+          <div class="semantic-gauges-grid">
+            <div class="gauge-box">
+              <span class="gauge-label">Active Topic Similarity</span>
+              <div class="gauge-value" id="simActiveVal">--</div>
+              <span class="gauge-sub" id="simActiveSub">Current topic similarity</span>
+            </div>
+
+            <div class="gauge-box">
+              <span class="gauge-label">Best Previous Topic</span>
+              <div class="gauge-value highlight" id="simPrevVal">--</div>
+              <span class="gauge-sub" id="simPrevTopicName">None</span>
+            </div>
+          </div>
+
+          <div class="margin-indicator" id="marginIndicator">
+            <div class="margin-meta">
+              <span>Similarity Margin (&Delta;):</span>
+              <span id="similarityMarginVal">--</span>
+            </div>
+            <p class="margin-explainer">Difference between candidate topic similarity and active topic similarity.</p>
+          </div>
+        </div>
+
+        <!-- Explainability Narrative -->
+        <div class="metric-card explainability-card" id="explainabilityCard">
+          <div class="card-title-row">
+            <h3 class="card-title">Hybrid Reasoning Explanation</h3>
+            <span class="override-pill" id="overridePill" style="display: none;">Override Applied</span>
+          </div>
+          <p class="explanation-text" id="explanationText">
+            Execute context inference to observe the DeBERTa sequence classification combined with MiniLM cosine retrieval.
+          </p>
+        </div>
+
+        <!-- Hybrid Threshold Tuner -->
+        <div class="metric-card settings-card">
+          <div class="card-title-row">
+            <h3 class="card-title">Hybrid Threshold Tuning</h3>
+            <span class="threshold-display" id="thresholdDisplay">0.20</span>
+          </div>
+          <p class="settings-helper">
+            Adjust the threshold (&tau;) below which a DeBERTa CONTINUATION is challenged by semantic topic distance:
+          </p>
+          <input 
+            type="range" 
+            id="thresholdSlider" 
+            class="editorial-slider" 
+            min="0.00" 
+            max="0.60" 
+            step="0.05" 
+            value="0.20"
+          >
+          <div class="slider-marks">
+            <span>0.00 (Strict DeBERTa)</span>
+            <span>0.20 (Default)</span>
+            <span>0.60 (Aggressive)</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Add Custom Topic Modal -->
+  <div class="modal-backdrop" id="topicModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Register New Topic Candidate</h3>
+        <button id="closeModalBtn" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label for="newTopicIdInput" class="input-label">Topic ID (e.g. T4):</label>
+        <input type="text" id="newTopicIdInput" class="editorial-input" placeholder="T4">
+
+        <label for="newTopicSummaryInput" class="input-label">Topic Summary / Scope:</label>
+        <textarea id="newTopicSummaryInput" class="editorial-textarea" rows="3" placeholder="Database indexing, B-trees, and query optimization"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelModalBtn" class="btn-ghost">Cancel</button>
+        <button id="saveTopicBtn" class="btn-primary">Register Topic</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="visualization.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
