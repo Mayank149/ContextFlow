@@ -60,24 +60,24 @@ A common failure mode in AI engineering is using one model for everything or let
 
 ```mermaid
 flowchart TD
-    Turn[Incoming User Turn] --> Deb[DeBERTa-v3-base Classifier]
-    Turn --> Emb[MiniLM Sentence Transformer]
+    Turn["Incoming User Turn"] --> Deb["DeBERTa-v3 Classifier"]
+    Turn --> Emb["MiniLM Sentence Transformer"]
     
-    Deb --> Probs[Transition Probabilities:\nCONTINUATION / SHIFT / RETURN]
-    Emb --> Sims[Cosine Similarities:\nCurrent vs Active Topic\nCurrent vs Previous Topics]
+    Deb --> Probs["Transition Probabilities"]
+    Emb --> Sims["Topic Cosine Similarities"]
     
-    Probs --> Hybrid{Hybrid Evaluator}
+    Probs --> Hybrid{"Hybrid Decision Layer"}
     Sims --> Hybrid
     
-    Hybrid -->|Normal Path| Primary[Trust DeBERTa Primary Prediction]
-    Hybrid -->|Global Novelty:\nAll Topics Sim < Threshold τ| ShiftRoute[Route to SHIFT:\nCreate New Topic Node]
-    Hybrid -->|Suspicious CONTINUATION:\nActive Sim < Threshold τ| Reconsider[Reconsider Decision:\nCompare DeBERTa SHIFT vs RETURN]
+    Hybrid -->|"High Confidence"| Primary["Trust DeBERTa Prediction"]
+    Hybrid -->|"All Similarities < 0.20"| ShiftRoute["Force SHIFT: Create New Topic"]
+    Hybrid -->|"Active Similarity < 0.20"| Reconsider["Compare SHIFT vs RETURN"]
     
-    Primary --> Res[Final Transition]
+    Primary --> Res["Final Transition Decision"]
     ShiftRoute --> Res
     Reconsider --> Res
     
-    Res -->|If RETURN| Ret[MiniLM Argmax Retrieval:\nIdentify Target Topic & Switch Context]
+    Res -->|"If RETURN"| Ret["MiniLM Semantic Retrieval: Switch Topic"]
 ```
 
 ### 1. DeBERTa as the Primary Classifier
