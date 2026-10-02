@@ -70,9 +70,11 @@ flowchart TD
     Sims --> Hybrid
     
     Hybrid -->|Normal Path| Primary[Trust DeBERTa Primary Prediction]
-    Hybrid -->|Suspicious CONTINUATION\nActive Sim < Threshold τ| Reconsider[Reconsider Decision:\nCompare DeBERTa SHIFT vs RETURN]
+    Hybrid -->|Global Novelty:\nAll Topics Sim < Threshold τ| ShiftRoute[Route to SHIFT:\nCreate New Topic Node]
+    Hybrid -->|Suspicious CONTINUATION:\nActive Sim < Threshold τ| Reconsider[Reconsider Decision:\nCompare DeBERTa SHIFT vs RETURN]
     
     Primary --> Res[Final Transition]
+    ShiftRoute --> Res
     Reconsider --> Res
     
     Res -->|If RETURN| Ret[MiniLM Argmax Retrieval:\nIdentify Target Topic & Switch Context]
@@ -86,8 +88,11 @@ MiniLM (`all-MiniLM-L6-v2`) does **not** replace the Transformer. Instead, it pr
 - **Supporting verification**: Checks whether the user's message actually aligns with the active topic's summary.
 - **Topic Resolution on RETURN**: When a `RETURN` is flagged, MiniLM identifies *which* previous topic out of memory the conversation returned to.
 
-### 3. Guarding Against False Continuations
-If DeBERTa predicts `CONTINUATION` but the semantic similarity between the message and the active topic falls below a configurable threshold $\tau$ (default `0.20`), ContextFlow challenges the prediction:
+### 3. Global Novelty Check (All Topics < Threshold)
+If the semantic similarity between the incoming user message and **all** topics currently in memory (active topic and historical topics) is lower than the threshold $\tau$ (default `0.20`), the turn represents completely new subject matter. ContextFlow automatically classifies the turn as a **`SHIFT`** and synthesizes a new topic node in the 3D context topology.
+
+### 4. Guarding Against False Continuations
+If DeBERTa predicts `CONTINUATION` but the semantic similarity between the message and the active topic falls below $\tau$ (default `0.20`), ContextFlow challenges the prediction:
 - It compares DeBERTa's `SHIFT` and `RETURN` probabilities.
 - It routes to whichever transition has stronger Transformer evidence.
 - This prevents conversational drift when a user introduces a new subject without overt transitional discourse markers.

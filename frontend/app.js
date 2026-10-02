@@ -90,7 +90,6 @@ class ContextFlowApp {
       sendBtn: document.getElementById("sendBtn"),
       composerActiveTopic: document.getElementById("composerActiveTopic"),
       clearChatBtn: document.getElementById("clearChatBtn"),
-      viewGraphBtn: document.getElementById("viewGraphBtn"),
       activeTopicBadge: document.getElementById("activeTopicBadge"),
       activeTopicSummary: document.getElementById("activeTopicSummary"),
       candidateTopicsList: document.getElementById("candidateTopicsList"),
@@ -170,14 +169,6 @@ class ContextFlowApp {
         this.dom.chatInput.value = msg;
         this.handleUserSendMessage();
       });
-    });
-
-    // View Graph
-    this.dom.viewGraphBtn.addEventListener("click", () => {
-      const panel = document.getElementById("graphPanel");
-      if (panel) {
-        panel.scrollIntoView({ behavior: "smooth" });
-      }
     });
 
     // Threshold Slider
@@ -640,7 +631,15 @@ class ContextFlowApp {
     let override = false;
     const threshold = req.continuation_threshold !== undefined ? req.continuation_threshold : 0.20;
 
-    if (rawPred === "CONTINUATION" && activeSim < threshold) {
+    // Check maximum similarity across all topics in memory
+    const simValues = Object.values(allSims);
+    const maxAllSim = simValues.length > 0 ? Math.max(...simValues) : -1.0;
+
+    if (maxAllSim < threshold) {
+      finalPred = "SHIFT";
+      conf = rawProbs.SHIFT;
+      override = true;
+    } else if (rawPred === "CONTINUATION" && activeSim < threshold) {
       override = true;
       finalPred = rawProbs.SHIFT >= rawProbs.RETURN ? "SHIFT" : "RETURN";
       conf = rawProbs[finalPred];

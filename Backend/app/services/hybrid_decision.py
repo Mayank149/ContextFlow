@@ -24,6 +24,14 @@ class HybridDecisionEngine:
     def __init__(self, default_threshold: float = settings.CONTINUATION_SIMILARITY_THRESHOLD):
         self.default_threshold = default_threshold
 
+    @staticmethod
+    def _format_prob(val: float) -> str:
+        if val >= 0.001:
+            return f"{val:.4f}"
+        elif val > 0:
+            return f"{val:.2e}"
+        return "0.0000"
+
     def evaluate(
         self,
         transformer_result: Dict[str, Any],
@@ -102,7 +110,7 @@ class HybridDecisionEngine:
                     f"Transformer initially predicted CONTINUATION, but semantic similarity to active topic "
                     f"'{active_topic.summary}' was unusually low ({active_sim:.4f} < threshold {threshold:.2f}). "
                     f"Hybrid layer reconsidered and selected SHIFT based on stronger Transformer evidence "
-                    f"({shift_prob:.4f} vs RETURN {return_prob:.4f})."
+                    f"(SHIFT: {self._format_prob(shift_prob)} vs RETURN: {self._format_prob(return_prob)})."
                 )
             else:
                 final_prediction = "RETURN"
@@ -111,7 +119,7 @@ class HybridDecisionEngine:
                     f"Transformer initially predicted CONTINUATION, but semantic similarity to active topic "
                     f"'{active_topic.summary}' was unusually low ({active_sim:.4f} < threshold {threshold:.2f}). "
                     f"Hybrid layer reconsidered and selected RETURN based on stronger Transformer evidence "
-                    f"({return_prob:.4f} vs SHIFT {shift_prob:.4f})."
+                    f"(RETURN: {self._format_prob(return_prob)} vs SHIFT: {self._format_prob(shift_prob)})."
                 )
 
         # 4. RETURN Topic Identification & Verification
@@ -184,6 +192,11 @@ class HybridDecisionEngine:
         if override_applied:
             lines.append(f"⚠️ HYBRID RECONSIDERATION TRIGGERED:")
             lines.append(reconsideration_reason)
+            if final_pred == "RETURN" and best_prev_topic and best_prev_sim is not None:
+                lines.append(
+                    f"MiniLM retrieved target topic [{best_prev_topic.topic_id}] '{best_prev_topic.summary}' "
+                    f"with cosine similarity of {best_prev_sim:.4f}."
+                )
             return " ".join(lines)
 
         if final_pred == "RETURN":
