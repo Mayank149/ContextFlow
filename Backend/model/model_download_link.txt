@@ -1,0 +1,15 @@
+ContextFlow - DeBERTa-v3 Fine-Tuned Model Weights
+
+Due to GitHub file size limits, the trained DeBERTa-v3 model weights (~737 MB) are hosted on Google Drive:
+https://drive.google.com/drive/folders/1OqcPv91vOa56kNvhXT4F-Qu7Kj5tZ-0A?usp=sharing
+
+Instructions:
+1. Open the Google Drive link above.
+2. Download the 'deberta_v3_contextflow' folder.
+3. Place the folder into this directory ('backend/model/'):
+
+backend/model/deberta_v3_contextflow/
+  ├── config.json
+  ├── model.safetensors
+  ├── tokenizer.json
+  └── tokenizer_config.json

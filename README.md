@@ -124,7 +124,8 @@ ContextFlow/
 │   │       └── hybrid_decision.py # Hybrid rules & explainability generator
 │   │
 │   ├── model/
-│   │   └── deberta_v3_contextflow/ # Fine-tuned DeBERTa model weights
+│   │   ├── deberta_v3_contextflow/ # Downloaded model directory (~737 MB)
+│   │   └── model_download_link.txt # Google Drive download link for model weights
 │   ├── requirements.txt         # Pinned CPU dependencies
 │   └── Dockerfile               # Production CPU container
 │
@@ -136,7 +137,7 @@ ContextFlow/
 │
 ├── Images/
 │   ├── image1.png               # Initial dashboard interface
-│   └── image2.png               # Live dialogue execution with dynamic topic transitions
+│   ├── image2.png               # Live dialogue execution with dynamic topic transitions
 │
 ├── Dataset/
 │   └── contextflow_dataset.jsonl # Benchmark dialogue dataset
@@ -148,6 +149,25 @@ ContextFlow/
 ---
 
 ## Quick Start Guide
+
+### 1. Download Fine-Tuned Model Weights
+
+Due to GitHub repository file size limits, the fine-tuned DeBERTa-v3 model weights (~737 MB) are hosted on Google Drive:
+
+* **Download Link:** [ContextFlow DeBERTa-v3 Weights (Google Drive)](https://drive.google.com/drive/folders/1OqcPv91vOa56kNvhXT4F-Qu7Kj5tZ-0A?usp=sharing)
+* A direct reference is also stored locally in [`backend/model/model_download_link.txt`](file:///c:/Users/Mayank%20Bansal/OneDrive/Desktop/coding/Machine%20Learning%20and%20AI/ContextFlow/backend/model/model_download_link.txt).
+
+Download the folder and place it directly into the `backend/model/` directory:
+
+```text
+backend/model/deberta_v3_contextflow/
+  ├── config.json
+  ├── model.safetensors
+  ├── tokenizer.json
+  └── tokenizer_config.json
+```
+
+---
 
 ### Option A: Local Python Environment (Recommended)
 

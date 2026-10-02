@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Large Model Weights (Downloaded separately via Google Drive)
+Backend/model/deberta_v3_contextflow/
+backend/model/deberta_v3_contextflow/
+*.safetensors
+*.bin
+*.pt
+*.onnx
+
+# Environment & IDE
+.env
+.vscode/
+.idea/
+.DS_Store
