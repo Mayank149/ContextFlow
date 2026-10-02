@@ -37,8 +37,8 @@ In multi-turn human-AI dialogues, conversations frequently branch, wander, or ci
 ```
 
 > ### Interactive Interface Overview
-> ![ContextFlow 3D Interface Placeholder](docs/images/contextflow_ui_overview.png)  
-> *Figure 1: ContextFlow Warm Futuristic Editorial Interface — Real-time 3D topic topology (Three.js), DeBERTa probability distributions, and MiniLM semantic similarity gauges.*
+> ![ContextFlow Chatbot Interface](Images/image1.png)  
+> *Figure 1: ContextFlow Interface — 3D Context Space topology (left), Conversational chat stream (center), and Real-time Decision & Evidence inference engine (right).*
 
 ---
 
@@ -99,9 +99,9 @@ If DeBERTa predicts `CONTINUATION` but the semantic similarity between the messa
 
 ---
 
-> ### Explainability & Transition Inspection
-> ![ContextFlow Decision Explainability Placeholder](docs/images/contextflow_explainability.png)  
-> *Figure 2: Real-time explainability breakdown showing Transformer logits, semantic similarity delta ($\Delta$), and the natural language justification.*
+> ### Live Context Transition & Topic Discovery
+> ![ContextFlow Live Transition and Topic Memory](Images/image2.png)  
+> *Figure 2: Real-time dialogue execution — Autonomous topic synthesis across SHIFT transitions, dynamic 3D topology updates, and explainable Transformer confidence.*
 
 ---
 
@@ -133,6 +133,10 @@ ContextFlow/
 │   ├── style.css                # CSS3 design system (charcoal, cream, coral, lavender)
 │   ├── visualization.js         # Interactive Three.js 3D dynamic topic topology
 │   └── app.js                   # Application state, benchmarks, and API client
+│
+├── Images/
+│   ├── image1.png               # Initial dashboard interface
+│   └── image2.png               # Live dialogue execution with dynamic topic transitions
 │
 ├── Dataset/
 │   └── contextflow_dataset.jsonl # Benchmark dialogue dataset
