@@ -186,7 +186,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 
 # Launch FastAPI server
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --reload
 ```
 *API Swagger Docs available at:* `http://localhost:8000/docs`
 
